@@ -263,3 +263,120 @@ mGBA contains the following third-party libraries:
 - [SQLite3](https://www.sqlite.org), which is public domain.
 
 If you are a game publisher and wish to license mGBA for commercial usage, please email [licensing@mgba.io](mailto:licensing@mgba.io) for more information.
+
+Branch Specific: Pokemon FireRed Overlay
+----------------------------------------
+
+A real-time Pokemon party viewer overlay for the 3DS bottom screen. Reads live game data directly from GBA EWRAM/ROM while FireRed is running, decrypts the Gen 3 data structures, and renders a detailed HUD with sprites, stats, moves, and more.
+
+**Target ROM:** Pokemon FireRed US v1.0 (`BPRE`)
+
+### Features
+
+- **Live party data** — reads and decrypts Gen 3 Pokemon structures from EWRAM in real-time
+- **Front sprites** — LZ77-decompressed, 4bpp tile-decoded, palette-applied sprites rendered via Citro3D
+- **Full stat display** — level, HP (color-coded), nature, Atk/Def/SpA/SpD/Spe, IVs, EVs, EXP
+- **Moveset viewer** — current 4 moves with PP counts
+- **Learnset viewer** — upcoming level-up moves read from ROM, with scrolling
+- **Status conditions** — SLP/PSN/BRN/FRZ/PAR/TOX displayed inline
+- **UI panels** — dark framed panels with bordered sprite portrait
+- **Party cycling** — ZR/ZL/Circle Pad/Touch to cycle through party members
+
+### Controls
+
+| Input | Action |
+|-------|--------|
+| ZR / Circle Pad Right | Next party member |
+| ZL / Circle Pad Left | Previous party member |
+| Touch (right side, bottom) | Toggle Moves / Learnset view |
+| Touch (elsewhere) | Next party member |
+| Circle Pad Up/Down | Scroll learnset |
+
+### Key Files
+
+```
+src/platform/3ds/
+  overlay.h        — Public API: overlayDraw() called from main.c
+  overlay.c        — Party data decryption, stat calculation, UI layout & rendering
+  sprite.h         — Public API: drawPokemonSprite(), drawRect(), spriteFree()
+  sprite.c         — LZ77 decompressor, 4bpp tile decoder, palette handler,
+                      Morton-order texture encoder, Citro3D texture management
+  romprofile.h/c   — ROM profile system: configurable offsets/limits per ROM,
+                      auto-detected by game code on first frame
+  main.c           — _drawOverlay() hook that calls overlayDraw() each frame
+  CMakeLists.txt   — Build config (overlay.c + sprite.c + romprofile.c)
+  ctr-gpu.h/c      — Citro3D batch rendering (ctrActivateTexture, ctrAddRectEx)
+```
+
+### Architecture
+
+#### Data Pipeline
+
+```
+GBA EWRAM (live)                    GBA ROM (static)
+      |                                   |
+      v                                   v
+ Party slot (100 bytes)         Species/Move name tables
+      |                         Sprite pointer table (0x2350AC)
+      v                         Palette pointer table (0x23730C)
+ XOR decrypt (PID ^ OTID)       Learnset pointer table
+      |                                   |
+      v                                   v
+ 4 substructures (GAEM order)   LZ77 decompress -> 4bpp detile
+      |                         -> palette apply (RGB555->GPU_RGBA8)
+      v                         -> Morton-order encode
+ PokeSlot struct                -> C3D_Tex upload
+      |                                   |
+      v                                   v
+ GUIFontPrintf (text)           ctrActivateTexture + ctrAddRectEx
+      |                                   |
+      +------- Citro3D batch pipeline ----+
+                      |
+                      v
+              3DS bottom screen
+```
+
+#### Gen 3 Decryption
+
+Each 100-byte party Pokemon contains:
+- **Header** (32 bytes): PID, OTID, nickname, language, flags
+- **Encrypted data** (48 bytes): XOR'd with `PID ^ OTID`, split into 4 x 12-byte substructures
+- **Party stats** (20 bytes): calculated stats, level, current HP (unencrypted)
+
+Substructure order is determined by `PID % 24` (24 permutations of Growth/Attacks/EVs/Misc).
+
+#### Sprite Rendering
+
+1. Read compressed sprite pointer from ROM table (`species * 8` byte entries)
+2. LZ77 decompress (GBA BIOS type `0x10`: flag byte + back-references)
+3. Decode 4bpp 8x8 tiles into 64x64 linear pixel indices
+4. LZ77 decompress the palette (16 colors, RGB555)
+5. Apply palette: RGB555 -> GPU_RGBA8 (`(R<<24)|(G<<16)|(B<<8)|A` for 3DS LE ARM)
+6. Write pixels in Morton (Z-order) pattern into `C3D_Tex`
+7. Flush CPU data cache, draw as textured quad via `ctrAddRectEx`
+
+Texture is cached per species and only re-decoded on species change.
+
+#### UI Rendering
+
+`drawRect()` uses a tiny 8x8 all-white `C3D_Tex` tinted by the vertex color parameter in `ctrAddRectEx`. This allows arbitrary solid-color rectangles through the same GPU batch pipeline as text and sprites — no separate rendering path needed.
+
+### FireRed US v1.0 ROM Offsets
+
+| Offset | Description |
+|--------|-------------|
+| `0x2350AC` | Front sprite pointer table (8 bytes/entry) |
+| `0x23730C` | Normal palette pointer table (8 bytes/entry) |
+| `0x245EE0` | Species name table (11 bytes/entry, Gen3 encoded) |
+| `0x247094` | Move name table (13 bytes/entry, Gen3 encoded) |
+
+### FireRed EWRAM Offsets
+
+| Offset (from WRAM base) | Description |
+|--------------------------|-------------|
+| `0x24029` | Party count |
+| `0x24284` | Party data (6 x 100 bytes) |
+
+### Possible Future Work
+
+- **ROM hack support** — The `RomProfile` system (`romprofile.h/c`) already externalizes all ROM table offsets and limits, but only ships a vanilla FireRed US v1.0 profile. Adding support for a ROM hack means adding a new entry to `sProfiles[]` in `romprofile.c` with the correct offsets. Matching could be extended from game code to CRC32 for hacks that share the same game code as their base ROM. Community contributions welcome.

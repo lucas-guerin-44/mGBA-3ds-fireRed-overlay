@@ -26,6 +26,7 @@
 #include <mgba-util/platform/3ds/3ds-vfs.h>
 #include <mgba-util/threading.h>
 #include "ctr-gpu.h"
+#include "overlay.h"
 
 #include <3ds.h>
 #include <3ds/gpu/gx.h>
@@ -294,10 +295,10 @@ static void _setup(struct mGUIRunner* runner) {
 	_map3DSKey(&runner->core->inputMap, KEY_B, GBA_KEY_B);
 	_map3DSKey(&runner->core->inputMap, KEY_START, GBA_KEY_START);
 	_map3DSKey(&runner->core->inputMap, KEY_SELECT, GBA_KEY_SELECT);
-	_map3DSKey(&runner->core->inputMap, KEY_UP, GBA_KEY_UP);
-	_map3DSKey(&runner->core->inputMap, KEY_DOWN, GBA_KEY_DOWN);
-	_map3DSKey(&runner->core->inputMap, KEY_LEFT, GBA_KEY_LEFT);
-	_map3DSKey(&runner->core->inputMap, KEY_RIGHT, GBA_KEY_RIGHT);
+	_map3DSKey(&runner->core->inputMap, KEY_DUP, GBA_KEY_UP);
+	_map3DSKey(&runner->core->inputMap, KEY_DDOWN, GBA_KEY_DOWN);
+	_map3DSKey(&runner->core->inputMap, KEY_DLEFT, GBA_KEY_LEFT);
+	_map3DSKey(&runner->core->inputMap, KEY_DRIGHT, GBA_KEY_RIGHT);
 	_map3DSKey(&runner->core->inputMap, KEY_L, GBA_KEY_L);
 	_map3DSKey(&runner->core->inputMap, KEY_R, GBA_KEY_R);
 
@@ -593,8 +594,39 @@ static void _prepareForFrame(struct mGUIRunner* runner) {
 	activeOutputTexture ^= 1;
 }
 
+static unsigned sOverlayKeysDown = 0;
+
+static void _drawOverlay(struct mGUIRunner* runner) {
+	int screenW, screenH;
+
+	if (!runner->core || !runner->core->board) {
+		return;
+	}
+
+	// Draw overlay on the screen opposite the game
+	if (screenMode >= SM_PA_TOP) {
+		C3D_FrameDrawOn(bottomScreen[doubleBuffer]);
+		ctrSetViewportSize(320, 240, true);
+		screenW = 320;
+		screenH = 240;
+	} else {
+		C3D_FrameDrawOn(topScreen[doubleBuffer]);
+		/* Use 400 logical coords for the overlay; in wide mode stretch the
+		   viewport to the full 800px framebuffer so pixels stay square. */
+		ctrSetViewportSize(400, 240, true);
+		if (gfxIsWide()) {
+			C3D_SetViewport(0, 0, 240, 800);
+		}
+		screenW = 400;
+		screenH = 240;
+	}
+
+	overlayDraw(runner, runner->params.font, screenW, screenH, sOverlayKeysDown);
+	sOverlayKeysDown = 0; /* consume after use */
+	ctrFlushBatch();
+}
+
 static void _drawFrame(struct mGUIRunner* runner, bool faded) {
-	UNUSED(runner);
 	C3D_Tex* tex = &outputTexture[activeOutputTexture];
 
 	GSPGPU_FlushDataCache(outputBuffer, 256 * GBA_VIDEO_VERTICAL_PIXELS * 2);
@@ -611,6 +643,9 @@ static void _drawFrame(struct mGUIRunner* runner, bool faded) {
 	}
 
 	_drawTex(runner->core, faded, interframeBlending);
+	if (!faded) {
+		_drawOverlay(runner);
+	}
 }
 
 static void _drawScreenshot(struct mGUIRunner* runner, const color_t* pixels, unsigned width, unsigned height, bool faded) {
@@ -640,9 +675,9 @@ static uint16_t _pollGameInput(struct mGUIRunner* runner) {
 	UNUSED(runner);
 
 	hidScanInput();
+	sOverlayKeysDown |= hidKeysDown(); /* capture for overlay before state resets */
 	uint32_t activeKeys = hidKeysHeld();
 	uint16_t keys = mInputMapKeyBits(&runner->core->inputMap, _3DS_INPUT, activeKeys, 0);
-	keys |= (activeKeys >> 24) & 0xF0;
 	return keys;
 }
 

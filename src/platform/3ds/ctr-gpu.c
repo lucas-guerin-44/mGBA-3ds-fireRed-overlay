@@ -32,6 +32,7 @@ struct ctrUIVertex {
 static struct ctrUIVertex* ctrVertexBuffer = NULL;
 static int ctrNumVerts = 0;
 static int ctrVertStart = 0;
+static s16 ctrViewportW = 400;
 
 static const C3D_Tex* activeTexture = NULL;
 
@@ -102,6 +103,7 @@ void ctrDeinitGpu(void) {
 }
 
 void ctrSetViewportSize(s16 w, s16 h, bool tilt) {
+	ctrViewportW = w;
 	C3D_SetViewport(0, 0, h, w);
 	C3D_Mtx projectionMtx;
 	if (tilt) {
@@ -182,7 +184,7 @@ void ctrTextureBias(u32 color) {
 }
 
 void ctrAddRectEx(u32 color, s16 x, s16 y, s16 w, s16 h, s16 u, s16 v, s16 uw, s16 vh, float rotate) {
-	if (x >= 400 && w >= 0) {
+	if (x >= ctrViewportW && w >= 0) {
 		return;
 	}
 	if (y >= 240 && h >= 0) {
