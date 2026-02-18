@@ -24,6 +24,10 @@ static const struct RomProfile sProfiles[] = {
 		13,         /* moveNameLen */
 		0x24029,    /* partyCount */
 		0x24284,    /* partyData */
+		0x23EAC8,   /* trainerTable (gTrainers[], 40 bytes/entry, 743 entries) */
+		{ 414, 415, 416, 417, 418, 420, 419, 350 }, /* gymLeaderIds (badge order) */
+		0x5008,     /* sb1PtrIwram (gSaveBlock1Ptr at 0x03005008) */
+		0x0FE4,     /* sb1BadgeOffset (flags@0x0EE0 + badge byte@0x104) */
 	},
 };
 

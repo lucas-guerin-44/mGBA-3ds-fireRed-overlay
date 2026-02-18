@@ -29,6 +29,14 @@ struct RomProfile {
 	/* EWRAM offsets (from WRAM base) */
 	uint32_t partyCount;
 	uint32_t partyData;
+
+	/* Trainer table (for gym leader ROM reads) */
+	uint32_t trainerTable;     /* ROM offset of gTrainers[] (40 bytes/entry) */
+	uint16_t gymLeaderIds[8];  /* trainer IDs for each gym, badge order */
+
+	/* Badge reading: SaveBlock1 pointer lives in IWRAM */
+	uint32_t sb1PtrIwram;      /* IWRAM offset of gSaveBlock1Ptr */
+	uint32_t sb1BadgeOffset;   /* offset from SB1 base to badge flags byte */
 };
 
 /* Call once when ROM is available. Matches ROM header and sets active profile.

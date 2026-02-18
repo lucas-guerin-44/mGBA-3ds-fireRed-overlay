@@ -19,6 +19,7 @@
 #include "feature/gui/gui-runner.h"
 #include <mgba-util/gui/font.h>
 #include <string.h>
+#include <stdio.h>
 #include <3ds.h>
 
 /* --- ABGR color constants (0xAABBGGRR) --- */
@@ -30,6 +31,8 @@
 #define CLR_DARK    0xFF808080  /* fainted / empty */
 #define CLR_HEADER  0xFFFFFF60  /* section headers (cyan-ish) */
 #define CLR_MOVE    0xFFE0E0FF  /* move names (warm white) */
+#define CLR_STAT_UP 0xFF5050FF  /* red: nature-boosted stat (+10%) */
+#define CLR_STAT_DN 0xFFFF8050  /* blue: nature-reduced stat (-10%) */
 
 /* --- UI panel colors --- */
 #define UI_PANEL    0xD0231919  /* #191923 dark charcoal, slightly transparent */
@@ -65,16 +68,86 @@ static const uint8_t sSubstructOrder[24][4] = {
 	/* 22 MEGA */ {3,2,0,1}, /* 23 MEAG */ {3,2,1,0},
 };
 
+/* Forward declaration (defined below, needed by readGymLeaderInfo) */
+static void decodeGen3String(const uint8_t* src, char* dst, int maxLen);
+
 /* ===================================================================
- *  Nature name table (PID % 25)
+ *  Gym leader info — read from ROM trainer table
  * =================================================================== */
-static const char* const sNatureNames[25] = {
-	"Hardy",  "Lonely", "Brave",  "Adamant", "Naughty",
-	"Bold",   "Docile", "Relaxed","Impish",  "Lax",
-	"Timid",  "Hasty",  "Serious","Jolly",   "Naive",
-	"Modest", "Mild",   "Quiet",  "Bashful", "Rash",
-	"Calm",   "Gentle", "Sassy",  "Careful", "Quirky"
+struct GymLeaderInfo {
+	char    name[13];   /* decoded trainer name */
+	uint8_t aceLevel;   /* highest level in party */
 };
+
+static int readGymLeaderInfo(const uint8_t* rom, int badgeIndex,
+                             struct GymLeaderInfo* out)
+{
+	const struct RomProfile* prof = romprofileGet();
+	uint32_t entryOff, partyPtr, partyOff;
+	uint8_t partyFlags, partySize;
+	int monSize, i;
+
+	if (badgeIndex < 0 || badgeIndex >= 8) return 0;
+
+	entryOff = prof->trainerTable + prof->gymLeaderIds[badgeIndex] * 40;
+
+	/* Trainer name: offset 0x04, 12 bytes Gen3-encoded */
+	decodeGen3String(rom + entryOff + 0x04, out->name, 12);
+
+	/* Party metadata */
+	partyFlags = rom[entryOff];
+	partySize  = rom[entryOff + 0x20];
+
+	memcpy(&partyPtr, rom + entryOff + 0x24, 4);
+	if ((partyPtr >> 24) != 0x08) return 0;
+	partyOff = partyPtr & 0x01FFFFFF;
+
+	/* Mon entry: 8 bytes default, 16 with custom moves (bit 0) */
+	monSize = (partyFlags & 1) ? 16 : 8;
+
+	/* Scan for highest level (level at +0x02 in each mon) */
+	out->aceLevel = 0;
+	for (i = 0; i < partySize && i < 6; i++) {
+		uint8_t lvl = rom[partyOff + i * monSize + 2];
+		if (lvl > out->aceLevel) out->aceLevel = lvl;
+	}
+
+	return 1;
+}
+
+/* ===================================================================
+ *  Nature -> stat color helper
+ *  boosted = nature/5, reduced = nature%5
+ *  0=Atk 1=Def 2=Spe 3=SpA 4=SpD
+ * =================================================================== */
+static uint32_t natureStatColor(uint8_t nature, int statIdx) {
+	int up = nature / 5, dn = nature % 5;
+	if (up == dn) return CLR_WHITE;
+	if (statIdx == up) return CLR_STAT_UP;
+	if (statIdx == dn) return CLR_STAT_DN;
+	return CLR_WHITE;
+}
+
+/* ===================================================================
+ *  Badge reader — find next unearned badge (0-7), or -1 if all earned
+ * =================================================================== */
+static int readNextBadge(const uint8_t* wram, const uint8_t* iwram) {
+	const struct RomProfile* prof = romprofileGet();
+	uint32_t sb1Ptr;
+	uint32_t sb1Off;
+	uint8_t badges;
+	int i;
+
+	memcpy(&sb1Ptr, iwram + prof->sb1PtrIwram, 4);
+	if ((sb1Ptr >> 24) != 0x02) return -1;
+	sb1Off = sb1Ptr & 0x3FFFF;
+	badges = wram[sb1Off + prof->sb1BadgeOffset];
+
+	for (i = 0; i < 8; i++) {
+		if (!(badges & (1 << i))) return i;
+	}
+	return -1;
+}
 
 /* ===================================================================
  *  Gen 3 character decoding (Pokemon text encoding -> ASCII)
@@ -320,9 +393,12 @@ static int readLearnset(const uint8_t* rom, uint16_t species,
  * =================================================================== */
 static void drawDetail(struct GUIFont* font, const uint8_t* wram,
                        const uint8_t* rom, int slotIndex, uint8_t partyCount,
+                       int nextBadge,
                        int screenW, int padX, int padY, int lineH)
 {
 	struct PokeSlot pk;
+	struct GymLeaderInfo gym;
+	int hasGym;
 	int y;
 	int m;
 	char moveNameBuf[14];
@@ -331,6 +407,8 @@ static void drawDetail(struct GUIFont* font, const uint8_t* wram,
 	int panelL, panelR, panelW, inset;
 	int sprX, sprY, textX, textR;
 	int topH;
+
+	hasGym = (nextBadge >= 0) ? readGymLeaderInfo(rom, nextBadge, &gym) : 0;
 
 	if (!readSlot(wram, rom, slotIndex, &pk)) {
 		GUIFontPrintf(font, screenW / 2, screenW / 4,
@@ -359,7 +437,7 @@ static void drawDetail(struct GUIFont* font, const uint8_t* wram,
 	/* Rows 1-3: vertically centered beside 64px sprite */
 	y = sprY + (64 - lineH * 3) / 2;
 
-	/* Row 1: species + level */
+	/* Row 1: species [status] + gym leader name */
 	{
 		const char* sts = statusText(pk.status);
 		if (sts)
@@ -369,23 +447,25 @@ static void drawDetail(struct GUIFont* font, const uint8_t* wram,
 			GUIFontPrintf(font, textX, y, GUI_ALIGN_LEFT, CLR_HEADER,
 			              "%s", pk.speciesName);
 	}
-	GUIFontPrintf(font, textR, y, GUI_ALIGN_RIGHT, CLR_WHITE,
-	              "Lv.%u", pk.level);
+	if (hasGym)
+		GUIFontPrintf(font, textR, y, GUI_ALIGN_RIGHT, CLR_GRAY,
+		              "%s", gym.name);
 	y += lineH;
 
-	/* Row 2: nickname + nature */
+	/* Row 2: level + gym leader ace level */
+	GUIFontPrintf(font, textX, y, GUI_ALIGN_LEFT, CLR_WHITE,
+	              "Lv.%u", pk.level);
+	if (hasGym)
+		GUIFontPrintf(font, textR, y, GUI_ALIGN_RIGHT, CLR_GRAY,
+		              "Ace Lv%u", gym.aceLevel);
+	y += lineH;
+
+	/* Row 3: nickname + HP */
 	GUIFontPrintf(font, textX, y, GUI_ALIGN_LEFT, CLR_GRAY,
 	              "%s", pk.nickname);
-	GUIFontPrintf(font, textR, y, GUI_ALIGN_RIGHT, CLR_WHITE,
-	              "%s", sNatureNames[pk.nature]);
-	y += lineH;
-
-	/* Row 3: HP + EXP */
-	GUIFontPrintf(font, textX, y, GUI_ALIGN_LEFT,
+	GUIFontPrintf(font, textR, y, GUI_ALIGN_RIGHT,
 	              hpColor(pk.curHP, pk.maxHP),
 	              "HP %u/%u", pk.curHP, pk.maxHP);
-	GUIFontPrintf(font, textR, y, GUI_ALIGN_RIGHT, CLR_GRAY,
-	              "EXP:%lu", (unsigned long)pk.exp);
 
 	/* === STATS PANEL (2 rows: stats left, IV/EV right) === */
 	y = padY + topH + 6;
@@ -395,15 +475,35 @@ static void drawDetail(struct GUIFont* font, const uint8_t* wram,
 		drawRect(panelL, y, panelW, statsH, UI_PANEL);
 		y += 12;
 
-		GUIFontPrintf(font, panelL + inset, y, GUI_ALIGN_LEFT, CLR_WHITE,
-		              "Atk:%-3u Def:%-3u Spe:%u", pk.atk, pk.def, pk.spe);
+		{
+			char sbuf[16];
+			int sx = panelL + inset;
+
+			snprintf(sbuf, sizeof(sbuf), "Atk:%-3u ", pk.atk);
+			GUIFontPrintf(font, sx, y, GUI_ALIGN_LEFT, natureStatColor(pk.nature, 0), "%s", sbuf);
+			sx += GUIFontSpanWidth(font, sbuf);
+
+			snprintf(sbuf, sizeof(sbuf), "Def:%-3u ", pk.def);
+			GUIFontPrintf(font, sx, y, GUI_ALIGN_LEFT, natureStatColor(pk.nature, 1), "%s", sbuf);
+			sx += GUIFontSpanWidth(font, sbuf);
+
+			GUIFontPrintf(font, sx, y, GUI_ALIGN_LEFT, natureStatColor(pk.nature, 2), "Spe:%u", pk.spe);
+		}
 		GUIFontPrintf(font, panelR - inset, y, GUI_ALIGN_RIGHT, CLR_GRAY,
 		              "IV %u/%u/%u/%u/%u/%u",
 		              pk.ivHP, pk.ivAtk, pk.ivDef, pk.ivSpe, pk.ivSpA, pk.ivSpD);
 		y += lineH;
 
-		GUIFontPrintf(font, panelL + inset, y, GUI_ALIGN_LEFT, CLR_WHITE,
-		              "SpA:%-3u SpD:%u", pk.spa, pk.spd);
+		{
+			char sbuf[16];
+			int sx = panelL + inset;
+
+			snprintf(sbuf, sizeof(sbuf), "SpA:%-3u ", pk.spa);
+			GUIFontPrintf(font, sx, y, GUI_ALIGN_LEFT, natureStatColor(pk.nature, 3), "%s", sbuf);
+			sx += GUIFontSpanWidth(font, sbuf);
+
+			GUIFontPrintf(font, sx, y, GUI_ALIGN_LEFT, natureStatColor(pk.nature, 4), "SpD:%u", pk.spd);
+		}
 		GUIFontPrintf(font, panelR - inset, y, GUI_ALIGN_RIGHT, CLR_GRAY,
 		              "EV %u/%u/%u/%u/%u/%u",
 		              pk.evHP, pk.evAtk, pk.evDef, pk.evSpe, pk.evSpA, pk.evSpD);
@@ -491,7 +591,9 @@ void overlayDraw(struct mGUIRunner* runner, struct GUIFont* font,
 	struct GBA* gba;
 	uint8_t* wram;
 	uint8_t* rom;
+	uint8_t* iwram;
 	uint8_t partyCount;
+	int nextBadge;
 	int lineH, padX, padY;
 
 	(void)screenH;
@@ -505,6 +607,7 @@ void overlayDraw(struct mGUIRunner* runner, struct GUIFont* font,
 	gba = (struct GBA*) runner->core->board;
 	wram = (uint8_t*) gba->memory.wram;
 	rom  = (uint8_t*) gba->memory.rom;
+	iwram = (uint8_t*) gba->memory.iwram;
 
 	{ /* Detect ROM profile once */
 		static int sProfileDetected = 0;
@@ -520,6 +623,7 @@ void overlayDraw(struct mGUIRunner* runner, struct GUIFont* font,
 
 	partyCount = wram[romprofileGet()->partyCount];
 	if (partyCount > MAX_PARTY) partyCount = MAX_PARTY;
+	nextBadge = readNextBadge(wram, iwram);
 
 	/* --- Input: direct poll with edge detection --- */
 	{
@@ -579,7 +683,7 @@ void overlayDraw(struct mGUIRunner* runner, struct GUIFont* font,
 
 	/* --- Always detail view --- */
 	drawDetail(font, wram, rom, sOverlayMode, partyCount,
-	           screenW, padX, padY, lineH);
+	           nextBadge, screenW, padX, padY, lineH);
 #else
 	(void)runner;
 	GUIFontPrintf(font, screenW / 2, screenH / 2,

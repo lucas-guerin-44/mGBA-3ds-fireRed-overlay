@@ -3,6 +3,8 @@
 *.swp
 *.pyc
 
+/.claude
+
 /build
 /build-*
 /.vs
