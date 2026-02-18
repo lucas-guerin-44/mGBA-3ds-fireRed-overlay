@@ -21,6 +21,10 @@
 void drawPokemonSprite(const uint8_t* rom, uint16_t species,
                        int x, int y, int w, int h);
 
+/* Same as drawPokemonSprite but with a grayscale palette (for fainted). */
+void drawPokemonSpriteGray(const uint8_t* rom, uint16_t species,
+                           int x, int y, int w, int h);
+
 /* Draw a filled rectangle. Color is ABGR (0xAABBGGRR). */
 void drawRect(int x, int y, int w, int h, uint32_t abgrColor);
 

@@ -427,9 +427,13 @@ static void drawTeamSidebar(struct GUIFont* font, const uint8_t* wram,
 				drawRect(sideL + 1, cellY + 1, sideW - 2, CELL_H - 2,
 				         (i == selected) ? UI_SEL_BG : UI_PANEL);
 
-				/* 32x32 sprite */
-				drawPokemonSprite(rom, pk.species, sprX, sprY,
-				                  SIDE_SPRITE, SIDE_SPRITE);
+				/* 32x32 sprite (grayscale if fainted) */
+				if (pk.curHP == 0)
+					drawPokemonSpriteGray(rom, pk.species, sprX, sprY,
+					                      SIDE_SPRITE, SIDE_SPRITE);
+				else
+					drawPokemonSprite(rom, pk.species, sprX, sprY,
+					                  SIDE_SPRITE, SIDE_SPRITE);
 
 				/* HP bar: 2px tall below sprite */
 				{
@@ -503,10 +507,14 @@ static void drawDetail(struct GUIFont* font, const uint8_t* wram,
 	drawRect(panelL - 2, TOP_OFFSET - 2, panelW + 4, topH + 4, UI_BORDER);
 	drawRect(panelL, TOP_OFFSET, panelW, topH, UI_PANEL);
 
-	/* Sprite frame + sprite (top-left) */
+	/* Sprite frame + sprite (top-left, grayscale if fainted) */
 	drawRect(sprX - 2, sprY - 2, DETAIL_SPRITE + 4, DETAIL_SPRITE + 4, UI_ACCENT);
-	drawPokemonSprite(rom, pk.species, sprX, sprY,
-	                  DETAIL_SPRITE, DETAIL_SPRITE);
+	if (pk.curHP == 0)
+		drawPokemonSpriteGray(rom, pk.species, sprX, sprY,
+		                      DETAIL_SPRITE, DETAIL_SPRITE);
+	else
+		drawPokemonSprite(rom, pk.species, sprX, sprY,
+		                  DETAIL_SPRITE, DETAIL_SPRITE);
 
 	/* Rows 1-3: beside sprite, shifted down for breathing room */
 	y = sprY + (DETAIL_SPRITE - lineH * 3) / 2 + TEXT_DROP;

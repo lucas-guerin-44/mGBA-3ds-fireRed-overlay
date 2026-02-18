@@ -113,7 +113,8 @@ static inline uint32_t texOffset(int x, int y, int texW) {
 /* ===================================================================
  *  Decode sprite from ROM into a specific cache slot
  * =================================================================== */
-static int decodeSpriteSlot(const uint8_t* rom, uint16_t species, int slot) {
+static int decodeSpriteSlot(const uint8_t* rom, uint16_t species, int slot,
+                            int grayscale) {
 	uint32_t sprPtr, palPtr;
 	uint32_t sprOff, palOff;
 	uint8_t decomp[MAX_DECOMP];
@@ -161,6 +162,10 @@ static int decodeSpriteSlot(const uint8_t* rom, uint16_t species, int slot) {
 		r = ((c >>  0) & 0x1F) << 3;
 		g = ((c >>  5) & 0x1F) << 3;
 		b = ((c >> 10) & 0x1F) << 3;
+		if (grayscale) {
+			uint8_t lum = (uint8_t)((r * 77 + g * 150 + b * 29) >> 8);
+			r = g = b = lum;
+		}
 		palette[i] = ((uint32_t)r << 24) | ((uint32_t)g << 16)
 		           | ((uint32_t)b <<  8) | 0xFF;
 	}
@@ -205,27 +210,31 @@ static int decodeSpriteSlot(const uint8_t* rom, uint16_t species, int slot) {
 	/* Flush CPU data cache so the GPU sees updated texture */
 	GSPGPU_FlushDataCache(texData, SPRITE_DIM * SPRITE_DIM * 4);
 
-	sCachedSpecies[slot] = species;
 	return 1;
 }
 
 /* ===================================================================
  *  Cache lookup: find existing slot or decode into a new one
  * =================================================================== */
-static C3D_Tex* findOrDecode(const uint8_t* rom, uint16_t species) {
+static C3D_Tex* findOrDecode(const uint8_t* rom, uint16_t species,
+                             int grayscale) {
+	/* Encode grayscale flag into cache key so both versions can coexist */
+	uint16_t cacheKey = species | (grayscale ? 0x8000 : 0);
 	int i;
 
 	/* Check cache for existing decode */
 	for (i = 0; i < SPRITE_CACHE_SIZE; i++) {
-		if (sTexInited[i] && sCachedSpecies[i] == species)
+		if (sTexInited[i] && sCachedSpecies[i] == cacheKey)
 			return &sSpriteTex[i];
 	}
 
 	/* Find first empty slot */
 	for (i = 0; i < SPRITE_CACHE_SIZE; i++) {
 		if (!sTexInited[i]) {
-			if (decodeSpriteSlot(rom, species, i))
+			if (decodeSpriteSlot(rom, species, i, grayscale)) {
+				sCachedSpecies[i] = cacheKey;
 				return &sSpriteTex[i];
+			}
 			return NULL;
 		}
 	}
@@ -233,22 +242,25 @@ static C3D_Tex* findOrDecode(const uint8_t* rom, uint16_t species) {
 	/* All slots full — evict round-robin */
 	i = sNextEvict;
 	sNextEvict = (sNextEvict + 1) % SPRITE_CACHE_SIZE;
-	if (decodeSpriteSlot(rom, species, i))
+	if (decodeSpriteSlot(rom, species, i, grayscale)) {
+		sCachedSpecies[i] = cacheKey;
 		return &sSpriteTex[i];
+	}
 	return NULL;
 }
 
 /* ===================================================================
  *  Public: draw sprite at screen position with arbitrary size
  * =================================================================== */
-void drawPokemonSprite(const uint8_t* rom, uint16_t species,
-                       int x, int y, int w, int h) {
+static void drawPokemonSpriteInternal(const uint8_t* rom, uint16_t species,
+                                      int x, int y, int w, int h,
+                                      int grayscale) {
 	C3D_Tex* tex;
 
 	if (species == 0 || species >= romprofileGet()->speciesCount) return;
 	if (w <= 0 || h <= 0) return;
 
-	tex = findOrDecode(rom, species);
+	tex = findOrDecode(rom, species, grayscale);
 	if (!tex) return;
 
 	/* Bind sprite texture and emit one textured quad.
@@ -260,6 +272,16 @@ void drawPokemonSprite(const uint8_t* rom, uint16_t species,
 	             0, 0,                                /* UV origin */
 	             SPRITE_DIM, SPRITE_DIM,              /* UV size (full texture) */
 	             0);                                  /* no rotation */
+}
+
+void drawPokemonSprite(const uint8_t* rom, uint16_t species,
+                       int x, int y, int w, int h) {
+	drawPokemonSpriteInternal(rom, species, x, y, w, h, 0);
+}
+
+void drawPokemonSpriteGray(const uint8_t* rom, uint16_t species,
+                           int x, int y, int w, int h) {
+	drawPokemonSpriteInternal(rom, species, x, y, w, h, 1);
 }
 
 void spriteFree(void) {
