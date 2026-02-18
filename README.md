@@ -212,3 +212,7 @@ Adding ROM Hack Support
 The `RomProfile` system ([romprofile.h/c](src/platform/3ds/romprofile.c)) externalizes all ROM table offsets and limits. Only a vanilla FireRed US v1.0 profile ships by default.
 
 To add a ROM hack profile, add a new entry to `sProfiles[]` in `romprofile.c` with the correct offsets for your hack. Matching could be extended from game code to CRC32 for hacks that share the same game code as their base ROM.
+
+---
+
+This is a hobby project born out of curiosity about Pokemon internals, the GBA memory layout, and the mGBA codebase. I built it for my own use while playing FireRed on 3DS and have little intention of maintaining it beyond features I personally want. That said, feel free to fork it or use it as a reference for your own overlay work.
