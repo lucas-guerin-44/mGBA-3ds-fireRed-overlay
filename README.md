@@ -18,6 +18,7 @@ Features
 - **Status conditions** — SLP/PSN/BRN/FRZ/PAR/TOX displayed inline
 - **Gym tracker** — next gym leader and current level cap shown in sidebar
 - **Full party sidebar** — all 6 party members visible at a glance, with grayscale sprites for fainted mons
+- **Battle log** — real-time combat log that tracks damage dealt (with move names), KOs, switches, status changes, and healing. Auto-shows when a battle starts, clears between fights
 - **Party cycling** — ZR/ZL/Circle Pad/Touch to cycle through party members
 
 Controls (Bottom Screen)
@@ -29,7 +30,9 @@ Controls (Bottom Screen)
 | ZL / Circle Pad Left | Previous party member |
 | Touch (right side, bottom) | Toggle Moves / Learnset view |
 | Touch (elsewhere) | Next party member |
-| Circle Pad Up/Down | Scroll learnset |
+| Touch (bottom bar, in battle) | Toggle Battle Log / Party view |
+| Touch (sidebar, in battle log) | Switch back to Party view |
+| Circle Pad Up/Down | Scroll learnset or battle log |
 
 Prerequisites
 -------------
@@ -126,10 +129,12 @@ src/platform/3ds/
   sprite.h         — Public API: drawPokemonSprite(), drawRect(), spriteFree()
   sprite.c         — LZ77 decompressor, 4bpp tile decoder, palette handler,
                       Morton-order texture encoder, Citro3D texture management
+  battle.h         — Public API: battlePoll(), battleDrawLog(), battleDrawTab()
+  battle.c         — Battle log: poll-diff engine, event detection, log rendering
   romprofile.h/c   — ROM profile system: configurable offsets/limits per ROM,
                       auto-detected by game code on first frame
   main.c           — _drawOverlay() hook that calls overlayDraw() each frame
-  CMakeLists.txt   — Build config (overlay.c + sprite.c + romprofile.c)
+  CMakeLists.txt   — Build config (overlay.c + sprite.c + romprofile.c + battle.c)
   ctr-gpu.h/c      — Citro3D batch rendering (ctrActivateTexture, ctrAddRectEx)
 
 build.sh           — Cross-platform build script (Windows + Unix)
@@ -205,6 +210,10 @@ ROM Offsets (FireRed US v1.0)
 |--------------------------|-------------|
 | `0x24029` | Party count |
 | `0x24284` | Party data (6 x 100 bytes) |
+| `0x22B4C` | Battle type flags (non-zero = in battle) |
+| `0x23BE4` | Battle Pokemon array (4 x 88 bytes) |
+| `0x23D4A` | Current move being executed |
+| `0x23D6B` | Attacker index (0=player, 1=opponent) |
 
 Adding ROM Hack Support
 ------------------------

@@ -28,6 +28,11 @@ static const struct RomProfile sProfiles[] = {
 		{ 414, 415, 416, 417, 418, 420, 419, 350 }, /* gymLeaderIds (badge order) */
 		0x5008,     /* sb1PtrIwram (gSaveBlock1Ptr at 0x03005008) */
 		0x0FE4,     /* sb1BadgeOffset (flags@0x0EE0 + badge byte@0x104) */
+		/* Battle system (from pokefirered decomp, confirmed relative to gPlayerParty) */
+		0x22B4C,    /* battleFlags (gBattleTypeFlags at 0x02022B4C) */
+		0x23BE4,    /* battleMons (gBattleMons at 0x02023BE4, 4 × 0x58) */
+		0x23D4A,    /* currentMove (gCurrentMove at 0x02023D4A) */
+		0x23D6B,    /* battlerAttacker (gBattlerAttacker at 0x02023D6B) */
 	},
 };
 

@@ -49,7 +49,7 @@ set_source_files_properties(
 	${CMAKE_CURRENT_BINARY_DIR}/uishader.shbin.h
 	PROPERTIES GENERATED ON)
 
-add_executable(${BINARY_NAME}.elf ${GUI_SRC} main.c overlay.c sprite.c romprofile.c)
+add_executable(${BINARY_NAME}.elf ${GUI_SRC} main.c overlay.c sprite.c romprofile.c battle.c)
 set_target_properties(${BINARY_NAME}.elf PROPERTIES COMPILE_DEFINITIONS "${OS_DEFINES};${FEATURE_DEFINES};${FUNCTION_DEFINES}")
 target_link_libraries(${BINARY_NAME}.elf ${BINARY_NAME} ${M_LIBRARY} ${OS_LIB})
 

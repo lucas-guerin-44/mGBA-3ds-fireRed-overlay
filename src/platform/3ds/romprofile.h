@@ -37,6 +37,12 @@ struct RomProfile {
 	/* Badge reading: SaveBlock1 pointer lives in IWRAM */
 	uint32_t sb1PtrIwram;      /* IWRAM offset of gSaveBlock1Ptr */
 	uint32_t sb1BadgeOffset;   /* offset from SB1 base to badge flags byte */
+
+	/* Battle system (EWRAM offsets from WRAM base) */
+	uint32_t battleFlags;      /* gBattleTypeFlags (u32, non-zero = in battle) */
+	uint32_t battleMons;       /* gBattleMons[] (4 entries × 0x58 bytes each) */
+	uint32_t currentMove;      /* gCurrentMove (u16) */
+	uint32_t battlerAttacker;  /* gBattlerAttacker (u8, 0=player 1=opponent) */
 };
 
 /* Call once when ROM is available. Matches ROM header and sets active profile.

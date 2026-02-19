@@ -4,6 +4,8 @@
 *.pyc
 
 /.claude
+CLAUDE.md
+
 /archive
 /build
 /build-*
