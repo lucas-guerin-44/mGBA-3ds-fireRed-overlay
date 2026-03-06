@@ -957,6 +957,23 @@ void _3dsToggleNetwork(void) {
 	}
 }
 
+int _3dsProfileGetSlot(void) {
+	return romprofileGetSlot();
+}
+
+void _3dsProfileSetSlot(int slot) {
+	romprofileSetSlot(slot);
+	_updateOverlayBacklight();
+}
+
+int _3dsProfileGetCount(void) {
+	return romprofileGetCount();
+}
+
+const char* _3dsProfileGetSlotName(int slot) {
+	return romprofileGetSlotName(slot);
+}
+
 int main() {
 	rotation.d.sample = _sampleRotation;
 	rotation.d.readTiltX = _readTiltX;

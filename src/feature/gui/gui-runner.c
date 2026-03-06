@@ -708,6 +708,15 @@ void mGUIRun(struct mGUIRunner* runner, const char* path) {
 				_3dsToggleNetwork();
 				networkItem->title = _3dsNetworkRunning() ? "Network Sharing: On" : "Network Sharing: Off";
 				break;
+			case RUNNER_CYCLE_PROFILE:
+				{
+					int slot = (_3dsProfileGetSlot() + 1) % (_3dsProfileGetCount() + 1);
+					_3dsProfileSetSlot(slot);
+					snprintf(profileLabel, sizeof(profileLabel), "Profile: %s",
+					         _3dsProfileGetSlotName(slot));
+					profileItem->title = profileLabel;
+				}
+				break;
 #endif
 			case RUNNER_CONTINUE:
 				break;
