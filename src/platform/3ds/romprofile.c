@@ -34,6 +34,30 @@ static const struct RomProfile sProfiles[] = {
 		0x23D4A,    /* currentMove (gCurrentMove at 0x02023D4A) */
 		0x23D6B,    /* battlerAttacker (gBattlerAttacker at 0x02023D6B) */
 	},
+	{
+		/* Pokemon Emerald US v1.0 (vanilla) */
+		"Emerald US v1.0",
+		412,        /* speciesCount (NUM_SPECIES, same as FireRed) */
+		355,        /* moveCount (MOVES_COUNT) */
+		0x301418,   /* spriteTable (gMonFrontPicTable) */
+		0x303678,   /* paletteTable (gMonPaletteTable) */
+		0x3185C8,   /* speciesNames (gSpeciesNames) */
+		0x31977C,   /* moveNames (gMoveNames) */
+		0x32937C,   /* learnsetTable (gLevelUpLearnsets) */
+		11,         /* speciesNameLen (same Gen 3 format) */
+		13,         /* moveNameLen (same Gen 3 format) */
+		0x244E9,    /* partyCount (gPlayerPartyCount at 0x020244E9) */
+		0x24744,    /* partyData (gPlayerParty at 0x02024744) */
+		0x310030,   /* trainerTable (gTrainers[], 40 bytes/entry) */
+		{ 265, 266, 267, 268, 269, 270, 271, 272 }, /* gymLeaderIds: Roxanne,Brawly,Wattson,Flannery,Norman,Winona,Tate&Liza,Juan */
+		0x5D8C,     /* sb1PtrIwram (gSaveBlock1Ptr at 0x03005D8C) */
+		0x137C,     /* sb1BadgeOffset (flags@0x1270 + badge byte@0x10C, FLAG_BADGE01_GET=0x867) */
+		/* Battle system (from pokeemerald decomp symbols branch) */
+		0x22FF0,    /* battleFlags (gBattleTypeFlags at 0x02022FF0) */
+		0x24084,    /* battleMons (gBattleMons at 0x02024084, 4 × 0x58) */
+		0x241EA,    /* currentMove (gCurrentMove at 0x020241EA) */
+		0x2420B,    /* battlerAttacker (gBattlerAttacker at 0x0202420B) */
+	},
 };
 
 #define PROFILE_COUNT (sizeof(sProfiles) / sizeof(sProfiles[0]))
@@ -58,8 +82,13 @@ int romprofileDetect(const uint8_t* rom) {
 		return 1;
 	}
 
-	/* Future: add more profiles here, or CRC32 matching for ROM hacks
-	 * that share the same game code as their base ROM. */
+	/* Emerald US v1.0: game code "BPEE", version 0 */
+	if (memcmp(gameCode, "BPEE", 4) == 0 && version == 0) {
+		sActive = &sProfiles[1];
+		sSupported = 1;
+		return 1;
+	}
+
 	(void)i;
 
 	sSupported = 0;
@@ -72,4 +101,34 @@ const struct RomProfile* romprofileGet(void) {
 
 int romprofileIsSupported(void) {
 	return sSupported;
+}
+
+int romprofileGetCount(void) {
+	return (int)PROFILE_COUNT;
+}
+
+const char* romprofileGetSlotName(int slot) {
+	if (slot <= 0 || slot > (int)PROFILE_COUNT)
+		return "Off";
+	return sProfiles[slot - 1].name;
+}
+
+void romprofileSetSlot(int slot) {
+	if (slot <= 0 || slot > (int)PROFILE_COUNT) {
+		sSupported = 0;
+	} else {
+		sActive = &sProfiles[slot - 1];
+		sSupported = 1;
+	}
+}
+
+int romprofileGetSlot(void) {
+	int i;
+	if (!sSupported)
+		return 0;
+	for (i = 0; i < (int)PROFILE_COUNT; i++) {
+		if (sActive == &sProfiles[i])
+			return i + 1;
+	}
+	return 0;
 }

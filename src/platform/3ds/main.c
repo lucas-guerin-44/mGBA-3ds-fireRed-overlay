@@ -28,6 +28,7 @@
 #include "ctr-gpu.h"
 #include "overlay.h"
 #include "romprofile.h"
+#include "netserver.h"
 
 #include <3ds.h>
 #include <3ds/gpu/gx.h>
@@ -153,6 +154,9 @@ static bool _initGpu(void) {
 
 	return ctrInitGpu();
 }
+
+static bool sShowOverlay = true;
+static bool sNetworkEnabled = true;
 
 static int sOverlayBacklightOff = 0; /* which screen backlight is off (0=none) */
 static aptHookCookie sAptHookCookie;
@@ -626,7 +630,7 @@ static void _setOverlayBacklight(int wantOff) {
 }
 
 static void _updateOverlayBacklight(void) {
-	if (!romprofileIsSupported()) {
+	if (!romprofileIsSupported() || !sShowOverlay) {
 		/* GSP_SCREEN constants are swapped vs physical position */
 		int screen = (screenMode >= SM_PA_TOP) ? GSP_SCREEN_TOP : GSP_SCREEN_BOTTOM;
 		_setOverlayBacklight(screen);
@@ -653,17 +657,31 @@ static void _drawOverlay(struct mGUIRunner* runner) {
 		return;
 	}
 
-	{ /* Detect ROM profile once; skip overlay entirely for unsupported ROMs */
+	{ /* Detect ROM profile once */
 		static int sDetected = 0;
+		static int sEverSupported = 0;
 		if (!sDetected) {
 			struct GBA* gba = (struct GBA*) runner->core->board;
 			romprofileDetect((const uint8_t*) gba->memory.rom);
 			sDetected = 1;
+			sEverSupported = romprofileIsSupported();
 			_updateOverlayBacklight();
+			if (romprofileIsSupported() && sNetworkEnabled) {
+				netserverStart(8888);
+			}
 		}
-		if (!romprofileIsSupported())
+		/* Skip overlay entirely for ROMs that never matched any game code */
+		if (!sEverSupported && !romprofileIsSupported())
 			return;
 	}
+
+	/* Update network even when overlay is hidden */
+	if (sNetworkEnabled) {
+		netserverUpdateParty(runner);
+	}
+
+	if (!sShowOverlay)
+		return;
 
 	// Draw overlay on the screen opposite the game
 	if (screenMode >= SM_PA_TOP) {
@@ -915,6 +933,30 @@ THREAD_ENTRY _core2Test(void* context) {
 	UNUSED(context);
 }
 
+/* ---- Pause-menu toggle callbacks (called from gui-runner.c) ---- */
+
+bool _3dsOverlayVisible(void) {
+	return sShowOverlay;
+}
+
+void _3dsToggleOverlay(void) {
+	sShowOverlay = !sShowOverlay;
+	_updateOverlayBacklight();
+}
+
+bool _3dsNetworkRunning(void) {
+	return sNetworkEnabled;
+}
+
+void _3dsToggleNetwork(void) {
+	sNetworkEnabled = !sNetworkEnabled;
+	if (sNetworkEnabled) {
+		netserverStart(8888);
+	} else {
+		netserverStop();
+	}
+}
+
 int main() {
 	rotation.d.sample = _sampleRotation;
 	rotation.d.readTiltX = _readTiltX;
@@ -1146,6 +1188,7 @@ int main() {
 	_map3DSKey(&runner.params.keyMap, KEY_CSTICK_DOWN, mGUI_INPUT_DECREASE_BRIGHTNESS);
 
 	mGUIRunloop(&runner);
+	netserverStop();
 	mGUIDeinit(&runner);
 
 	_cleanup();

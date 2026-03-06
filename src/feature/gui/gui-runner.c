@@ -37,8 +37,22 @@ enum {
 	RUNNER_CONFIG,
 	RUNNER_RESET,
 	RUNNER_CHEATS,
+	RUNNER_TOGGLE_OVERLAY,
+	RUNNER_TOGGLE_NETWORK,
+	RUNNER_CYCLE_PROFILE,
 	RUNNER_COMMAND_MASK = 0xFFFF
 };
+
+#ifdef __3DS__
+extern bool _3dsOverlayVisible(void);
+extern void _3dsToggleOverlay(void);
+extern bool _3dsNetworkRunning(void);
+extern void _3dsToggleNetwork(void);
+extern int _3dsProfileGetSlot(void);
+extern void _3dsProfileSetSlot(int slot);
+extern int _3dsProfileGetCount(void);
+extern const char* _3dsProfileGetSlotName(int slot);
+#endif
 
 #define RUNNER_STATE(X) ((X) << 16)
 
@@ -383,6 +397,26 @@ void mGUIRun(struct mGUIRunner* runner, const char* path) {
 	if (runner->params.getText) {
 		*GUIMenuItemListAppend(&pauseMenu.items) = (struct GUIMenuItem) { .title = "Cheats", .data = GUI_V_U(RUNNER_CHEATS) };
 	}
+#ifdef __3DS__
+	struct GUIMenuItem* overlayItem = GUIMenuItemListAppend(&pauseMenu.items);
+	*overlayItem = (struct GUIMenuItem) {
+		.title = _3dsOverlayVisible() ? "Hide Overlay" : "Show Overlay",
+		.data = GUI_V_U(RUNNER_TOGGLE_OVERLAY)
+	};
+	struct GUIMenuItem* networkItem = GUIMenuItemListAppend(&pauseMenu.items);
+	*networkItem = (struct GUIMenuItem) {
+		.title = _3dsNetworkRunning() ? "Network Sharing: On" : "Network Sharing: Off",
+		.data = GUI_V_U(RUNNER_TOGGLE_NETWORK)
+	};
+	static char profileLabel[48];
+	snprintf(profileLabel, sizeof(profileLabel), "Profile: %s",
+	         _3dsProfileGetSlotName(_3dsProfileGetSlot()));
+	struct GUIMenuItem* profileItem = GUIMenuItemListAppend(&pauseMenu.items);
+	*profileItem = (struct GUIMenuItem) {
+		.title = profileLabel,
+		.data = GUI_V_U(RUNNER_CYCLE_PROFILE)
+	};
+#endif
 	*GUIMenuItemListAppend(&pauseMenu.items) = (struct GUIMenuItem) { .title = "Configure", .data = GUI_V_U(RUNNER_CONFIG) };
 	*GUIMenuItemListAppend(&pauseMenu.items) = (struct GUIMenuItem) { .title = "Reset game", .data = GUI_V_U(RUNNER_RESET) };
 	*GUIMenuItemListAppend(&pauseMenu.items) = (struct GUIMenuItem) { .title = "Exit game", .data = GUI_V_U(RUNNER_EXIT) };
@@ -665,6 +699,16 @@ void mGUIRun(struct mGUIRunner* runner, const char* path) {
 			case RUNNER_CHEATS:
 				mGUIShowCheats(runner);
 				break;
+#ifdef __3DS__
+			case RUNNER_TOGGLE_OVERLAY:
+				_3dsToggleOverlay();
+				overlayItem->title = _3dsOverlayVisible() ? "Hide Overlay" : "Show Overlay";
+				break;
+			case RUNNER_TOGGLE_NETWORK:
+				_3dsToggleNetwork();
+				networkItem->title = _3dsNetworkRunning() ? "Network Sharing: On" : "Network Sharing: Off";
+				break;
+#endif
 			case RUNNER_CONTINUE:
 				break;
 			}

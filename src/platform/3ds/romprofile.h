@@ -55,4 +55,16 @@ const struct RomProfile* romprofileGet(void);
 /* Returns 1 if the last romprofileDetect() call matched a known ROM */
 int romprofileIsSupported(void);
 
+/* Number of known profiles (not counting "Off") */
+int romprofileGetCount(void);
+
+/* Get name for a profile slot: 0 = "Off", 1..N = profile names */
+const char* romprofileGetSlotName(int slot);
+
+/* Set the active profile by slot index (0 = Off, 1..N = profiles) */
+void romprofileSetSlot(int slot);
+
+/* Get the current active slot index (0 = Off, 1..N = profiles) */
+int romprofileGetSlot(void);
+
 #endif

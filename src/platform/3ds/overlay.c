@@ -61,6 +61,7 @@ static unsigned sPrevHeld = 0;     /* for edge detection */
 static int sShowLearnset = 0;      /* 0 = current moves, 1 = learnset */
 static int sLearnsetScroll = 0;    /* scroll offset within learnset */
 static int sShowIVEV = 0;          /* 0 = stats, 1 = IV/EV */
+static unsigned sFramePressed = 0;  /* newly pressed buttons this frame */
 
 /* ===================================================================
  *  Gen 3 substructure order table  (Bulbapedia canonical)
@@ -701,10 +702,20 @@ void overlayDraw(struct mGUIRunner* runner, struct GUIFont* font,
 	rom  = (uint8_t*) gba->memory.rom;
 	iwram = (uint8_t*) gba->memory.iwram;
 
-
 	padX = 6;
 	padY = 8;
 	lineH = GUIFontHeight(font) + 2;
+
+	/* --- Edge detection (once per frame, before any early return) --- */
+	{
+		unsigned held = hidKeysHeld();
+		sFramePressed = held & ~sPrevHeld;
+		sPrevHeld = held;
+	}
+
+	/* Skip all overlay content when profile is off */
+	if (!romprofileIsSupported())
+		return;
 
 	/* Sidebar bounds */
 	sideR = screenW - padX;
@@ -717,11 +728,9 @@ void overlayDraw(struct mGUIRunner* runner, struct GUIFont* font,
 	/* Poll battle state each frame (detects events via diff) */
 	battlePoll(wram, rom);
 
-	/* --- Input: direct poll with edge detection --- */
+	/* --- Input handling --- */
 	{
-		unsigned held = hidKeysHeld();
-		unsigned pressed = held & ~sPrevHeld; /* newly pressed this frame */
-		sPrevHeld = held;
+		unsigned pressed = sFramePressed;
 
 		if (pressed & KEY_ZR) {
 			sOverlayMode++;
@@ -805,6 +814,7 @@ void overlayDraw(struct mGUIRunner* runner, struct GUIFont* font,
 			else if (sLearnsetScroll > 0)
 				sLearnsetScroll--;
 		}
+
 	}
 	/* Clamp if party shrank */
 	if (sOverlayMode >= partyCount)
