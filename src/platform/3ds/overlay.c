@@ -677,7 +677,7 @@ static void drawDetail(struct GUIFont* font, const uint8_t* wram,
  *  Main entry — called from _drawOverlay in main.c
  * =================================================================== */
 void overlayDraw(struct mGUIRunner* runner, struct GUIFont* font,
-                 int screenW, int screenH, unsigned keysDown)
+                 int screenW, int screenH, unsigned keys)
 {
 #ifdef M_CORE_GBA
 	struct GBA* gba;
@@ -688,6 +688,7 @@ void overlayDraw(struct mGUIRunner* runner, struct GUIFont* font,
 	int nextBadge;
 	int lineH, padX, padY;
 	int sideL, sideR;
+	(void) keys;
 
 	if (!runner->core || !runner->core->board) {
 		GUIFontPrintf(font, screenW / 2, screenH / 2,
@@ -700,13 +701,6 @@ void overlayDraw(struct mGUIRunner* runner, struct GUIFont* font,
 	rom  = (uint8_t*) gba->memory.rom;
 	iwram = (uint8_t*) gba->memory.iwram;
 
-	{ /* Detect ROM profile once */
-		static int sProfileDetected = 0;
-		if (!sProfileDetected) {
-			romprofileDetect(rom);
-			sProfileDetected = 1;
-		}
-	}
 
 	padX = 6;
 	padY = 8;

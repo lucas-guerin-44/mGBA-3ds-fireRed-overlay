@@ -39,6 +39,7 @@ static const struct RomProfile sProfiles[] = {
 #define PROFILE_COUNT (sizeof(sProfiles) / sizeof(sProfiles[0]))
 
 static const struct RomProfile* sActive = &sProfiles[0];
+static int sSupported = 0;
 
 /* GBA ROM header: game code at offset 0xAC (4 bytes), version at 0xBC */
 int romprofileDetect(const uint8_t* rom) {
@@ -53,6 +54,7 @@ int romprofileDetect(const uint8_t* rom) {
 	/* FireRed US v1.0: game code "BPRE", version 0 */
 	if (memcmp(gameCode, "BPRE", 4) == 0 && version == 0) {
 		sActive = &sProfiles[0];
+		sSupported = 1;
 		return 1;
 	}
 
@@ -60,11 +62,14 @@ int romprofileDetect(const uint8_t* rom) {
 	 * that share the same game code as their base ROM. */
 	(void)i;
 
-	/* Fallback to vanilla FireRed */
-	sActive = &sProfiles[0];
+	sSupported = 0;
 	return 0;
 }
 
 const struct RomProfile* romprofileGet(void) {
 	return sActive;
+}
+
+int romprofileIsSupported(void) {
+	return sSupported;
 }

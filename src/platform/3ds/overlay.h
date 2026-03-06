@@ -5,6 +5,6 @@
 
 struct mGUIRunner;
 
-void overlayDraw(struct mGUIRunner* runner, struct GUIFont* font, int screenW, int screenH, unsigned keysDown);
+void overlayDraw(struct mGUIRunner* runner, struct GUIFont* font, int screenW, int screenH, unsigned keys);
 
 #endif

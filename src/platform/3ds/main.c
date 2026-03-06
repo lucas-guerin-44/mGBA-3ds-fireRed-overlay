@@ -27,6 +27,7 @@
 #include <mgba-util/threading.h>
 #include "ctr-gpu.h"
 #include "overlay.h"
+#include "romprofile.h"
 
 #include <3ds.h>
 #include <3ds/gpu/gx.h>
@@ -153,6 +154,10 @@ static bool _initGpu(void) {
 	return ctrInitGpu();
 }
 
+static int sOverlayBacklightOff = 0; /* which screen backlight is off (0=none) */
+static aptHookCookie sAptHookCookie;
+static void _setOverlayBacklight(int wantOff);
+
 static void _cleanup(void) {
 	ctrDeinitGpu();
 
@@ -176,6 +181,9 @@ static void _cleanup(void) {
 	C3D_Fini();
 
 	gfxExit();
+
+	_setOverlayBacklight(0);
+	aptUnhook(&sAptHookCookie);
 
 	if (hasSound != NO_SOUND) {
 		linearFree(audioLeft);
@@ -407,6 +415,7 @@ static void _gameLoaded(struct mGUIRunner* runner) {
 }
 
 static void _gameUnloaded(struct mGUIRunner* runner) {
+	_setOverlayBacklight(0);
 	osSetSpeedupEnable(false);
 	frameLimiter = true;
 
@@ -596,11 +605,64 @@ static void _prepareForFrame(struct mGUIRunner* runner) {
 
 static unsigned sOverlayKeysDown = 0;
 
+/* Set which screen backlight should be off (0 = all on).
+ * Handles turning on the previous screen and off the new one. */
+static void _setOverlayBacklight(int wantOff) {
+	if (wantOff == sOverlayBacklightOff)
+		return;
+	/* Restore previous screen */
+	if (sOverlayBacklightOff) {
+		gspLcdInit();
+		GSPLCD_PowerOnBacklight(sOverlayBacklightOff);
+		gspLcdExit();
+	}
+	/* Turn off new screen */
+	if (wantOff) {
+		gspLcdInit();
+		GSPLCD_PowerOffBacklight(wantOff);
+		gspLcdExit();
+	}
+	sOverlayBacklightOff = wantOff;
+}
+
+static void _updateOverlayBacklight(void) {
+	if (!romprofileIsSupported()) {
+		/* GSP_SCREEN constants are swapped vs physical position */
+		int screen = (screenMode >= SM_PA_TOP) ? GSP_SCREEN_TOP : GSP_SCREEN_BOTTOM;
+		_setOverlayBacklight(screen);
+	} else {
+		_setOverlayBacklight(0);
+	}
+}
+
+static void _aptHookCallback(APT_HookType hook, void* param) {
+	(void)param;
+	if (hook == APTHOOK_ONSUSPEND || hook == APTHOOK_ONSLEEP) {
+		/* Restore backlight before system takes over screens */
+		_setOverlayBacklight(0);
+	} else if (hook == APTHOOK_ONRESTORE || hook == APTHOOK_ONWAKEUP) {
+		/* Re-apply backlight off after returning */
+		_updateOverlayBacklight();
+	}
+}
+
 static void _drawOverlay(struct mGUIRunner* runner) {
 	int screenW, screenH;
 
 	if (!runner->core || !runner->core->board) {
 		return;
+	}
+
+	{ /* Detect ROM profile once; skip overlay entirely for unsupported ROMs */
+		static int sDetected = 0;
+		if (!sDetected) {
+			struct GBA* gba = (struct GBA*) runner->core->board;
+			romprofileDetect((const uint8_t*) gba->memory.rom);
+			sDetected = 1;
+			_updateOverlayBacklight();
+		}
+		if (!romprofileIsSupported())
+			return;
 	}
 
 	// Draw overlay on the screen opposite the game
@@ -685,6 +747,7 @@ static void _incrementScreenMode(struct mGUIRunner* runner) {
 	UNUSED(runner);
 	screenMode = (screenMode + 1) % SM_MAX;
 	mCoreConfigSetUIntValue(&runner->config, "screenMode", screenMode);
+	_updateOverlayBacklight();
 }
 
 static void _setFrameLimiter(struct mGUIRunner* runner, bool limit) {
@@ -873,6 +936,7 @@ int main() {
 	ptmuInit();
 	mcuHwcInit();
 	camInit();
+	aptHook(&sAptHookCookie, _aptHookCallback, NULL);
 
 	hasSound = NO_SOUND;
 	if (!ndspInit()) {

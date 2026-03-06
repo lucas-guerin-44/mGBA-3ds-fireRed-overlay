@@ -52,4 +52,7 @@ int romprofileDetect(const uint8_t* rom);
 /* Get the active profile (never NULL — returns default if undetected) */
 const struct RomProfile* romprofileGet(void);
 
+/* Returns 1 if the last romprofileDetect() call matched a known ROM */
+int romprofileIsSupported(void);
+
 #endif
