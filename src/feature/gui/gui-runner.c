@@ -39,7 +39,7 @@ enum {
 	RUNNER_CHEATS,
 	RUNNER_TOGGLE_OVERLAY,
 	RUNNER_TOGGLE_NETWORK,
-	RUNNER_CYCLE_PROFILE,
+	RUNNER_SET_PROFILE,
 	RUNNER_COMMAND_MASK = 0xFFFF
 };
 
@@ -48,7 +48,6 @@ extern bool _3dsOverlayVisible(void);
 extern void _3dsToggleOverlay(void);
 extern bool _3dsNetworkRunning(void);
 extern void _3dsToggleNetwork(void);
-extern int _3dsProfileGetSlot(void);
 extern void _3dsProfileSetSlot(int slot);
 extern int _3dsProfileGetCount(void);
 extern const char* _3dsProfileGetSlotName(int slot);
@@ -355,6 +354,13 @@ void mGUIRun(struct mGUIRunner* runner, const char* path) {
 		.index = 0,
 		.background = &runner->background.d
 	};
+#ifdef __3DS__
+	struct GUIMenu profileMenu = {
+		.title = "ROM Profile",
+		.index = 0,
+		.background = &runner->background.d
+	};
+#endif
 	struct GUIMenu stateSaveMenu = {
 		.title = "Save state",
 		.index = 0,
@@ -408,13 +414,23 @@ void mGUIRun(struct mGUIRunner* runner, const char* path) {
 		.title = _3dsNetworkRunning() ? "Network Sharing: On" : "Network Sharing: Off",
 		.data = GUI_V_U(RUNNER_TOGGLE_NETWORK)
 	};
-	static char profileLabel[48];
-	snprintf(profileLabel, sizeof(profileLabel), "Profile: %s",
-	         _3dsProfileGetSlotName(_3dsProfileGetSlot()));
-	struct GUIMenuItem* profileItem = GUIMenuItemListAppend(&pauseMenu.items);
-	*profileItem = (struct GUIMenuItem) {
-		.title = profileLabel,
-		.data = GUI_V_U(RUNNER_CYCLE_PROFILE)
+	{
+		int i, count = _3dsProfileGetCount();
+		GUIMenuItemListInit(&profileMenu.items, count + 1);
+		*GUIMenuItemListAppend(&profileMenu.items) = (struct GUIMenuItem) {
+			.title = "Off",
+			.data = GUI_V_U(RUNNER_SET_PROFILE | RUNNER_STATE(0))
+		};
+		for (i = 1; i <= count; i++) {
+			*GUIMenuItemListAppend(&profileMenu.items) = (struct GUIMenuItem) {
+				.title = _3dsProfileGetSlotName(i),
+				.data = GUI_V_U(RUNNER_SET_PROFILE | RUNNER_STATE(i))
+			};
+		}
+	}
+	*GUIMenuItemListAppend(&pauseMenu.items) = (struct GUIMenuItem) {
+		.title = "ROM Profile",
+		.submenu = &profileMenu
 	};
 #endif
 	*GUIMenuItemListAppend(&pauseMenu.items) = (struct GUIMenuItem) { .title = "Configure", .data = GUI_V_U(RUNNER_CONFIG) };
@@ -708,14 +724,8 @@ void mGUIRun(struct mGUIRunner* runner, const char* path) {
 				_3dsToggleNetwork();
 				networkItem->title = _3dsNetworkRunning() ? "Network Sharing: On" : "Network Sharing: Off";
 				break;
-			case RUNNER_CYCLE_PROFILE:
-				{
-					int slot = (_3dsProfileGetSlot() + 1) % (_3dsProfileGetCount() + 1);
-					_3dsProfileSetSlot(slot);
-					snprintf(profileLabel, sizeof(profileLabel), "Profile: %s",
-					         _3dsProfileGetSlotName(slot));
-					profileItem->title = profileLabel;
-				}
+			case RUNNER_SET_PROFILE:
+				_3dsProfileSetSlot(item->data.v.u >> 16);
 				break;
 #endif
 			case RUNNER_CONTINUE:
@@ -796,6 +806,9 @@ void mGUIRun(struct mGUIRunner* runner, const char* path) {
 	GUIMenuItemListDeinit(&pauseMenu.items);
 	GUIMenuItemListDeinit(&stateSaveMenu.items);
 	GUIMenuItemListDeinit(&stateLoadMenu.items);
+#ifdef __3DS__
+	GUIMenuItemListDeinit(&profileMenu.items);
+#endif
 	mLOG(GUI_RUNNER, INFO, "Game stopped!");
 }
 
