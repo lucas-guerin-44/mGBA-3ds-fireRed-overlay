@@ -58,6 +58,32 @@ static const struct RomProfile sProfiles[] = {
 		0x241EA,    /* currentMove (gCurrentMove at 0x020241EA) */
 		0x2420B,    /* battlerAttacker (gBattlerAttacker at 0x0202420B) */
 	},
+	{
+		/* Pokemon Lazarus v2.0 (pokeemerald-expansion based hack)
+		 * Party offsets extracted from save state EWRAM dump.
+		 * ROM tables use vanilla Emerald offsets — may not be accurate.
+		 * Battle/badge offsets unknown — zeroed to disable those features. */
+		"Lazarus v2.0",
+		2000,       /* speciesCount (expansion adds gen 4-9, ~1400+ species) */
+		900,        /* moveCount (expansion adds gen 4-9 moves) */
+		0x301418,   /* spriteTable (vanilla Emerald — may differ) */
+		0x303678,   /* paletteTable (vanilla Emerald — may differ) */
+		0x3185C8,   /* speciesNames (vanilla Emerald — may differ) */
+		0x31977C,   /* moveNames (vanilla Emerald — may differ) */
+		0x32937C,   /* learnsetTable (vanilla Emerald — may differ) */
+		11,         /* speciesNameLen */
+		13,         /* moveNameLen */
+		0x1B95D,    /* partyCount (gPlayerPartyCount at 0x0201B95D) */
+		0x1B960,    /* partyData (gPlayerParty at 0x0201B960) */
+		0,          /* trainerTable (unknown) */
+		{ 0, 0, 0, 0, 0, 0, 0, 0 }, /* gymLeaderIds (unknown) */
+		0,          /* sb1PtrIwram (unknown) */
+		0,          /* sb1BadgeOffset (unknown) */
+		0,          /* battleFlags (unknown) */
+		0,          /* battleMons (unknown) */
+		0,          /* currentMove (unknown) */
+		0,          /* battlerAttacker (unknown) */
+	},
 };
 
 #define PROFILE_COUNT (sizeof(sProfiles) / sizeof(sProfiles[0]))

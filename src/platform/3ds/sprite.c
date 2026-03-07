@@ -127,6 +127,8 @@ static int decodeSpriteSlot(const uint8_t* rom, uint16_t species, int slot,
 
 	const struct RomProfile* prof = romprofileGet();
 
+	if (prof->spriteTable == 0 || prof->paletteTable == 0) return 0;
+
 	/* Read sprite data pointer (8-byte table entries) */
 	memcpy(&sprPtr, rom + prof->spriteTable + species * 8, 4);
 	if ((sprPtr >> 24) != 0x08) return 0;

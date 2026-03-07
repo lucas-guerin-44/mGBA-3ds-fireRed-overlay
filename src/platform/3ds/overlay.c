@@ -103,6 +103,7 @@ static int readGymLeaderInfo(const uint8_t* rom, int badgeIndex,
 	int monSize, i;
 
 	if (badgeIndex < 0 || badgeIndex >= 8) return 0;
+	if (prof->trainerTable == 0) return 0;
 
 	entryOff = prof->trainerTable + prof->gymLeaderIds[badgeIndex] * 40;
 
@@ -153,6 +154,7 @@ static int readNextBadge(const uint8_t* wram, const uint8_t* iwram) {
 	uint8_t badges;
 	int i;
 
+	if (prof->sb1PtrIwram == 0) return -1;
 	memcpy(&sb1Ptr, iwram + prof->sb1PtrIwram, 4);
 	if ((sb1Ptr >> 24) != 0x02) return -1;
 	sb1Off = sb1Ptr & 0x3FFFF;
@@ -200,6 +202,10 @@ static void readSpeciesName(const uint8_t* rom, uint16_t species, char* buf) {
 		strcpy(buf, "???");
 		return;
 	}
+	if (p->speciesNames == 0) {
+		snprintf(buf, 12, "#%u", species);
+		return;
+	}
 	decodeGen3String(rom + p->speciesNames + species * p->speciesNameLen,
 	                 buf, p->speciesNameLen);
 }
@@ -210,8 +216,8 @@ static void readMoveName(const uint8_t* rom, uint16_t moveId, char* buf) {
 		strcpy(buf, "---");
 		return;
 	}
-	if (moveId >= p->moveCount) {
-		strcpy(buf, "???");
+	if (p->moveNames == 0 || moveId >= p->moveCount) {
+		snprintf(buf, 14, "Move #%u", moveId);
 		return;
 	}
 	decodeGen3String(rom + p->moveNames + moveId * p->moveNameLen,
@@ -306,10 +312,13 @@ static int readSlot(const uint8_t* wram, const uint8_t* rom,
 	memcpy(&out->species, decrypted + growthOff, 2);
 	memcpy(&out->exp,     decrypted + growthOff + 4, 4);
 
-	if (out->species == 0 || out->species >= prof->speciesCount)
-		return 0; /* invalid */
-
-	readSpeciesName(rom, out->species, out->speciesName);
+	if (out->species == 0) return 0; /* empty slot */
+	if (out->species >= prof->speciesCount) {
+		/* Unknown species but slot has data — show with fallback name */
+		snprintf(out->speciesName, sizeof(out->speciesName), "#%u", out->species);
+	} else {
+		readSpeciesName(rom, out->species, out->speciesName);
+	}
 
 	/* Attacks (type 1): 4 moves + 4 PP */
 	attackOff = findSubstructOffset(pid, 1);
@@ -382,6 +391,7 @@ static int readLearnset(const uint8_t* rom, uint16_t species,
 	int count = 0;
 
 	if (species == 0 || species >= prof->speciesCount) return 0;
+	if (prof->learnsetTable == 0) return 0;
 
 	/* Read the pointer from the species table */
 	memcpy(&ptrAddr, rom + prof->learnsetTable + species * 4, 4);
@@ -429,13 +439,15 @@ static void drawTeamSidebar(struct GUIFont* font, const uint8_t* wram,
 				drawRect(sideL + 1, cellY + 1, sideW - 2, CELL_H - 2,
 				         (i == selected) ? UI_SEL_BG : UI_PANEL);
 
-				/* 32x32 sprite (grayscale if fainted) */
-				if (pk.curHP == 0)
-					drawPokemonSpriteGray(rom, pk.species, sprX, sprY,
-					                      SIDE_SPRITE, SIDE_SPRITE);
-				else
-					drawPokemonSprite(rom, pk.species, sprX, sprY,
-					                  SIDE_SPRITE, SIDE_SPRITE);
+				/* 32x32 sprite (grayscale if fainted, skip if no sprite table) */
+				if (romprofileGet()->spriteTable != 0) {
+					if (pk.curHP == 0)
+						drawPokemonSpriteGray(rom, pk.species, sprX, sprY,
+						                      SIDE_SPRITE, SIDE_SPRITE);
+					else
+						drawPokemonSprite(rom, pk.species, sprX, sprY,
+						                  SIDE_SPRITE, SIDE_SPRITE);
+				}
 
 				/* HP bar: 2px tall below sprite */
 				{
@@ -511,12 +523,18 @@ static void drawDetail(struct GUIFont* font, const uint8_t* wram,
 
 	/* Sprite frame + sprite (top-left, grayscale if fainted) */
 	drawRect(sprX - 2, sprY - 2, DETAIL_SPRITE + 4, DETAIL_SPRITE + 4, UI_ACCENT);
-	if (pk.curHP == 0)
-		drawPokemonSpriteGray(rom, pk.species, sprX, sprY,
-		                      DETAIL_SPRITE, DETAIL_SPRITE);
-	else
-		drawPokemonSprite(rom, pk.species, sprX, sprY,
-		                  DETAIL_SPRITE, DETAIL_SPRITE);
+	if (romprofileGet()->spriteTable != 0) {
+		if (pk.curHP == 0)
+			drawPokemonSpriteGray(rom, pk.species, sprX, sprY,
+			                      DETAIL_SPRITE, DETAIL_SPRITE);
+		else
+			drawPokemonSprite(rom, pk.species, sprX, sprY,
+			                  DETAIL_SPRITE, DETAIL_SPRITE);
+	} else {
+		GUIFontPrintf(font, sprX + DETAIL_SPRITE / 2,
+		              sprY + DETAIL_SPRITE / 2 - 4,
+		              GUI_ALIGN_HCENTER, CLR_DARK, "?");
+	}
 
 	/* Rows 1-3: beside sprite, shifted down for breathing room */
 	y = sprY + (DETAIL_SPRITE - lineH * 3) / 2 + TEXT_DROP;
@@ -615,7 +633,7 @@ static void drawDetail(struct GUIFont* font, const uint8_t* wram,
 		drawRect(panelL, movesY, panelW, movesH, UI_PANEL);
 		y += 10 + TEXT_DROP;
 
-		if (sShowLearnset) {
+		if (sShowLearnset && romprofileGet()->learnsetTable != 0) {
 			GUIFontPrintf(font, panelL + inset, y, GUI_ALIGN_LEFT,
 			              CLR_HEADER, "LEARNSET");
 			GUIFontPrintf(font, panelR - inset, y, GUI_ALIGN_RIGHT,
@@ -656,8 +674,9 @@ static void drawDetail(struct GUIFont* font, const uint8_t* wram,
 		} else {
 			GUIFontPrintf(font, panelL + inset, y, GUI_ALIGN_LEFT,
 			              CLR_HEADER, "MOVES");
-			GUIFontPrintf(font, panelR - inset, y, GUI_ALIGN_RIGHT,
-			              CLR_HEADER, "[Learnset]");
+			if (romprofileGet()->learnsetTable != 0)
+				GUIFontPrintf(font, panelR - inset, y, GUI_ALIGN_RIGHT,
+				              CLR_HEADER, "[Learnset]");
 			y += lineH;
 
 			for (m = 0; m < 4; m++) {
@@ -726,7 +745,8 @@ void overlayDraw(struct mGUIRunner* runner, struct GUIFont* font,
 	nextBadge = readNextBadge(wram, iwram);
 
 	/* Poll battle state each frame (detects events via diff) */
-	battlePoll(wram, rom);
+	if (romprofileGet()->battleFlags != 0)
+		battlePoll(wram, rom);
 
 	/* --- Input handling --- */
 	{

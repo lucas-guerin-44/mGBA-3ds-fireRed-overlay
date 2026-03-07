@@ -101,6 +101,10 @@ static void readMoveName(const uint8_t* rom, uint16_t moveId, char* buf) {
 		buf[0] = '\0';
 		return;
 	}
+	if (p->moveNames == 0) {
+		snprintf(buf, 14, "Move #%u", moveId);
+		return;
+	}
 	decodeStr(rom + p->moveNames + moveId * p->moveNameLen,
 	          buf, p->moveNameLen);
 }
@@ -159,6 +163,7 @@ void battlePoll(const uint8_t* wram, const uint8_t* rom) {
 	char nick[11];
 	char buf[LOG_LINE];
 
+	if (prof->battleFlags == 0) return;
 	memcpy(&flags, wram + prof->battleFlags, 4);
 	inBattle = (flags != 0) ? 1 : 0;
 
