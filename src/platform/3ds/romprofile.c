@@ -66,11 +66,11 @@ static const struct RomProfile sProfiles[] = {
 		"Lazarus v2.0",
 		2000,       /* speciesCount (expansion adds gen 4-9, ~1400+ species) */
 		900,        /* moveCount (expansion adds gen 4-9 moves) */
-		0x301418,   /* spriteTable (vanilla Emerald — may differ) */
-		0x303678,   /* paletteTable (vanilla Emerald — may differ) */
-		0x3185C8,   /* speciesNames (vanilla Emerald — may differ) */
-		0x31977C,   /* moveNames (vanilla Emerald — may differ) */
-		0x32937C,   /* learnsetTable (vanilla Emerald — may differ) */
+		0,          /* spriteTable (unknown — expansion relocates tables) */
+		0,          /* paletteTable (unknown) */
+		0,          /* speciesNames (unknown) */
+		0,          /* moveNames (unknown) */
+		0,          /* learnsetTable (unknown) */
 		11,         /* speciesNameLen */
 		13,         /* moveNameLen */
 		0x1B95D,    /* partyCount (gPlayerPartyCount at 0x0201B95D) */
