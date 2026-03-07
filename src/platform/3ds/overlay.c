@@ -290,6 +290,7 @@ struct PokeSlot {
 	uint32_t status;
 	char     nickname[11];
 	char     speciesName[12];
+	uint8_t  statsValid;   /* 0 if stats section looks like garbage */
 };
 
 static int readSlot(const uint8_t* wram, const uint8_t* rom,
@@ -349,6 +350,13 @@ static int readSlot(const uint8_t* wram, const uint8_t* rom,
 
 	/* Status condition (unencrypted, offset 0x50) */
 	memcpy(&out->status, slot + 0x50, 4);
+
+	/* Sanity check: expansion hacks may have different stat offsets */
+	out->statsValid = (out->maxHP > 0 && out->maxHP <= 999
+	                && out->level > 0 && out->level <= 100
+	                && out->atk <= 999 && out->def <= 999
+	                && out->spe <= 999 && out->spa <= 999
+	                && out->spd <= 999) ? 1 : 0;
 
 	/* EVs (substructure type 2): HP/Atk/Def/Spe/SpA/SpD */
 	evsOff = findSubstructOffset(pid, 2);
@@ -441,7 +449,7 @@ static void drawTeamSidebar(struct GUIFont* font, const uint8_t* wram,
 
 				/* 32x32 sprite (grayscale if fainted, skip if no sprite table) */
 				if (romprofileGet()->spriteTable != 0) {
-					if (pk.curHP == 0)
+					if (pk.statsValid && pk.curHP == 0)
 						drawPokemonSpriteGray(rom, pk.species, sprX, sprY,
 						                      SIDE_SPRITE, SIDE_SPRITE);
 					else
@@ -449,8 +457,8 @@ static void drawTeamSidebar(struct GUIFont* font, const uint8_t* wram,
 						                  SIDE_SPRITE, SIDE_SPRITE);
 				}
 
-				/* HP bar: 2px tall below sprite */
-				{
+				/* HP bar: 2px tall below sprite (skip if stats garbage) */
+				if (pk.statsValid) {
 					int barW = SIDE_SPRITE;
 					int barX = sprX;
 					int barY = sprY + SIDE_SPRITE + 1;
@@ -524,16 +532,12 @@ static void drawDetail(struct GUIFont* font, const uint8_t* wram,
 	/* Sprite frame + sprite (top-left, grayscale if fainted) */
 	drawRect(sprX - 2, sprY - 2, DETAIL_SPRITE + 4, DETAIL_SPRITE + 4, UI_ACCENT);
 	if (romprofileGet()->spriteTable != 0) {
-		if (pk.curHP == 0)
+		if (pk.statsValid && pk.curHP == 0)
 			drawPokemonSpriteGray(rom, pk.species, sprX, sprY,
 			                      DETAIL_SPRITE, DETAIL_SPRITE);
 		else
 			drawPokemonSprite(rom, pk.species, sprX, sprY,
 			                  DETAIL_SPRITE, DETAIL_SPRITE);
-	} else {
-		GUIFontPrintf(font, sprX + DETAIL_SPRITE / 2,
-		              sprY + DETAIL_SPRITE / 2 - 4,
-		              GUI_ALIGN_HCENTER, CLR_DARK, "?");
 	}
 
 	/* Rows 1-3: beside sprite, shifted down for breathing room */
@@ -541,7 +545,7 @@ static void drawDetail(struct GUIFont* font, const uint8_t* wram,
 
 	/* Row 1: species [status] + gym leader name */
 	{
-		const char* sts = statusText(pk.status);
+		const char* sts = pk.statsValid ? statusText(pk.status) : NULL;
 		if (sts)
 			GUIFontPrintf(font, textX, y, GUI_ALIGN_LEFT, CLR_HEADER,
 			              "%s  [%s]", pk.speciesName, sts);
@@ -555,8 +559,9 @@ static void drawDetail(struct GUIFont* font, const uint8_t* wram,
 	y += lineH;
 
 	/* Row 2: level + gym leader ace level */
-	GUIFontPrintf(font, textX, y, GUI_ALIGN_LEFT, CLR_WHITE,
-	              "Lv.%u", pk.level);
+	if (pk.statsValid)
+		GUIFontPrintf(font, textX, y, GUI_ALIGN_LEFT, CLR_WHITE,
+		              "Lv.%u", pk.level);
 	if (hasGym)
 		GUIFontPrintf(font, textR, y, GUI_ALIGN_RIGHT, CLR_GRAY,
 		              "Ace Lv%u", gym.aceLevel);
@@ -565,13 +570,14 @@ static void drawDetail(struct GUIFont* font, const uint8_t* wram,
 	/* Row 3: nickname + HP */
 	GUIFontPrintf(font, textX, y, GUI_ALIGN_LEFT, CLR_GRAY,
 	              "%s", pk.nickname);
-	GUIFontPrintf(font, textR, y, GUI_ALIGN_RIGHT,
-	              hpColor(pk.curHP, pk.maxHP),
-	              "HP %u/%u", pk.curHP, pk.maxHP);
+	if (pk.statsValid)
+		GUIFontPrintf(font, textR, y, GUI_ALIGN_RIGHT,
+		              hpColor(pk.curHP, pk.maxHP),
+		              "HP %u/%u", pk.curHP, pk.maxHP);
 
-	/* === STATS PANEL (toggleable: stats or IV/EV) === */
+	/* === STATS PANEL (toggleable: stats or IV/EV) — skip if stats garbage === */
 	y = TOP_OFFSET + topH + 3;
-	{
+	if (pk.statsValid) {
 		int statsH = lineH * 2 + 18 + TEXT_DROP;
 		drawRect(panelL - 2, y - 2, panelW + 4, statsH + 4, UI_BORDER);
 		drawRect(panelL, y, panelW, statsH, UI_PANEL);
@@ -624,69 +630,71 @@ static void drawDetail(struct GUIFont* font, const uint8_t* wram,
 		}
 	}
 
-	/* === MOVES PANEL (fills remaining height) === */
-	y += 3;
-	{
-		int movesY = y;
-		int movesH = 240 - movesY;
-		drawRect(panelL - 2, movesY - 2, panelW + 4, movesH + 4, UI_BORDER);
-		drawRect(panelL, movesY, panelW, movesH, UI_PANEL);
-		y += 10 + TEXT_DROP;
+	/* === MOVES PANEL (fills remaining height) — skip if no move names === */
+	if (romprofileGet()->moveNames != 0) {
+		y += 3;
+		{
+			int movesY = y;
+			int movesH = 240 - movesY;
+			drawRect(panelL - 2, movesY - 2, panelW + 4, movesH + 4, UI_BORDER);
+			drawRect(panelL, movesY, panelW, movesH, UI_PANEL);
+			y += 10 + TEXT_DROP;
 
-		if (sShowLearnset && romprofileGet()->learnsetTable != 0) {
-			GUIFontPrintf(font, panelL + inset, y, GUI_ALIGN_LEFT,
-			              CLR_HEADER, "LEARNSET");
-			GUIFontPrintf(font, panelR - inset, y, GUI_ALIGN_RIGHT,
-			              CLR_HEADER, "[Moves]");
-			y += lineH;
-
-			learnTotal = readLearnset(rom, pk.species, learnset, 32);
-			{
-				int upcoming = 0;
-				int skipped = 0;
-				for (li = 0; li < learnTotal; li++) {
-					if (learnset[li].level > pk.level) upcoming++;
-				}
-				if (upcoming <= 4)
-					sLearnsetScroll = 0;
-				else if (sLearnsetScroll > upcoming - 4)
-					sLearnsetScroll = upcoming - 4;
-
-				learnShown = 0;
-				for (li = 0; li < learnTotal && learnShown < 4; li++) {
-					if (learnset[li].level <= pk.level) continue;
-					if (skipped < sLearnsetScroll) {
-						skipped++;
-						continue;
-					}
-					readMoveName(rom, learnset[li].moveId, moveNameBuf);
-					GUIFontPrintf(font, panelL + inset + 4, y,
-					              GUI_ALIGN_LEFT, CLR_MOVE,
-					              "Lv.%-3u %s", learnset[li].level, moveNameBuf);
-					y += lineH;
-					learnShown++;
-				}
-			}
-			if (learnShown == 0) {
-				GUIFontPrintf(font, panelL + inset + 4, y,
-				              GUI_ALIGN_LEFT, CLR_DARK, "(no more moves)");
-			}
-		} else {
-			GUIFontPrintf(font, panelL + inset, y, GUI_ALIGN_LEFT,
-			              CLR_HEADER, "MOVES");
-			if (romprofileGet()->learnsetTable != 0)
+			if (sShowLearnset && romprofileGet()->learnsetTable != 0) {
+				GUIFontPrintf(font, panelL + inset, y, GUI_ALIGN_LEFT,
+				              CLR_HEADER, "LEARNSET");
 				GUIFontPrintf(font, panelR - inset, y, GUI_ALIGN_RIGHT,
-				              CLR_HEADER, "[Learnset]");
-			y += lineH;
-
-			for (m = 0; m < 4; m++) {
-				if (pk.moves[m] == 0) continue;
-				readMoveName(rom, pk.moves[m], moveNameBuf);
-				GUIFontPrintf(font, panelL + inset + 4, y,
-				              GUI_ALIGN_LEFT, CLR_MOVE, "%s", moveNameBuf);
-				GUIFontPrintf(font, panelR - inset, y,
-				              GUI_ALIGN_RIGHT, CLR_GRAY, "PP:%u", pk.pp[m]);
+				              CLR_HEADER, "[Moves]");
 				y += lineH;
+
+				learnTotal = readLearnset(rom, pk.species, learnset, 32);
+				{
+					int upcoming = 0;
+					int skipped = 0;
+					for (li = 0; li < learnTotal; li++) {
+						if (learnset[li].level > pk.level) upcoming++;
+					}
+					if (upcoming <= 4)
+						sLearnsetScroll = 0;
+					else if (sLearnsetScroll > upcoming - 4)
+						sLearnsetScroll = upcoming - 4;
+
+					learnShown = 0;
+					for (li = 0; li < learnTotal && learnShown < 4; li++) {
+						if (learnset[li].level <= pk.level) continue;
+						if (skipped < sLearnsetScroll) {
+							skipped++;
+							continue;
+						}
+						readMoveName(rom, learnset[li].moveId, moveNameBuf);
+						GUIFontPrintf(font, panelL + inset + 4, y,
+						              GUI_ALIGN_LEFT, CLR_MOVE,
+						              "Lv.%-3u %s", learnset[li].level, moveNameBuf);
+						y += lineH;
+						learnShown++;
+					}
+				}
+				if (learnShown == 0) {
+					GUIFontPrintf(font, panelL + inset + 4, y,
+					              GUI_ALIGN_LEFT, CLR_DARK, "(no more moves)");
+				}
+			} else {
+				GUIFontPrintf(font, panelL + inset, y, GUI_ALIGN_LEFT,
+				              CLR_HEADER, "MOVES");
+				if (romprofileGet()->learnsetTable != 0)
+					GUIFontPrintf(font, panelR - inset, y, GUI_ALIGN_RIGHT,
+					              CLR_HEADER, "[Learnset]");
+				y += lineH;
+
+				for (m = 0; m < 4; m++) {
+					if (pk.moves[m] == 0) continue;
+					readMoveName(rom, pk.moves[m], moveNameBuf);
+					GUIFontPrintf(font, panelL + inset + 4, y,
+					              GUI_ALIGN_LEFT, CLR_MOVE, "%s", moveNameBuf);
+					GUIFontPrintf(font, panelR - inset, y,
+					              GUI_ALIGN_RIGHT, CLR_GRAY, "PP:%u", pk.pp[m]);
+					y += lineH;
+				}
 			}
 		}
 	}
