@@ -6,6 +6,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.app.AlertDialog
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
@@ -15,6 +16,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.mgba.companion.R
 import com.mgba.companion.data.PokemonRepository
+import com.mgba.companion.data.Routes
 import com.mgba.companion.data.SpeciesNames
 import com.mgba.companion.data.WalkerStore
 import com.mgba.companion.scanner.ScanActivity
@@ -63,6 +65,10 @@ class WalkerActivity : AppCompatActivity(), SensorEventListener {
             returnLauncher.launch(Intent(this, ReturnActivity::class.java))
         }
 
+        findViewById<Button>(R.id.btn_change_route).setOnClickListener {
+            showRoutePicker()
+        }
+
         refreshUI()
     }
 
@@ -95,6 +101,23 @@ class WalkerActivity : AppCompatActivity(), SensorEventListener {
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+
+    private fun showRoutePicker() {
+        val routes = Routes.all()
+        val names: Array<CharSequence> = routes.map { "${it.name} — ${it.description}" }.toTypedArray()
+        val mon = store.getActiveMon()
+        val currentIdx = routes.indexOfFirst { it.key == mon?.routeKey }.coerceAtLeast(0)
+
+        AlertDialog.Builder(this)
+            .setTitle("Choose Route")
+            .setSingleChoiceItems(names, currentIdx) { dialog, which ->
+                store.setRoute(routes[which].key)
+                refreshUI()
+                dialog.dismiss()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
 
     private fun initStepBaseline() {
         // Read current step counter value and set as baseline
@@ -134,6 +157,9 @@ class WalkerActivity : AppCompatActivity(), SensorEventListener {
 
         emptyGroup.visibility = View.GONE
         activeGroup.visibility = View.VISIBLE
+
+        val route = Routes.get(mon.routeKey)
+        findViewById<TextView>(R.id.walker_route).text = route.name
 
         findViewById<TextView>(R.id.walker_nickname).text = mon.nickname
         findViewById<TextView>(R.id.walker_level).text = "Lv. ${mon.level}"

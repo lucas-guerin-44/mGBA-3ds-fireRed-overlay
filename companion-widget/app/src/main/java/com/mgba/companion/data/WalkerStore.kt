@@ -25,22 +25,13 @@ class WalkerStore(context: Context) {
         val stepBaseline: Int,
         val totalSteps: Int,
         val bonusXp: Int,
-        val foundItems: List<ItemDrop>
+        val foundItems: List<ItemDrop>,
+        val routeKey: String
     )
 
     data class ItemDrop(val itemId: Int, val name: String, val qty: Int)
 
-    // Loot table: itemId, name, weight (higher = more common)
-    private data class LootEntry(val itemId: Int, val name: String, val weight: Int)
-    private val LOOT_TABLE = listOf(
-        LootEntry(13, "Potion", 30),        // 0x0D
-        LootEntry(22, "Super Potion", 15),   // 0x16
-        LootEntry(4, "Poke Ball", 25),       // 0x04
-        LootEntry(139, "Oran Berry", 15),    // 0x8B
-        LootEntry(133, "Cheri Berry", 10),   // 0x85
-        LootEntry(68, "Rare Candy", 5),      // 0x44
-    )
-    private val TOTAL_WEIGHT = LOOT_TABLE.sumOf { it.weight }
+    private fun getRoute(): Routes.Route = Routes.get(prefs.getString("route_key", null))
 
     fun hasActiveMon(): Boolean = prefs.contains("raw_blob")
 
@@ -56,11 +47,12 @@ class WalkerStore(context: Context) {
             stepBaseline = prefs.getInt("step_baseline", 0),
             totalSteps = prefs.getInt("total_steps", 0),
             bonusXp = prefs.getInt("bonus_xp", 0),
-            foundItems = loadItems()
+            foundItems = loadItems(),
+            routeKey = prefs.getString("route_key", null) ?: Routes.DEFAULT.key
         )
     }
 
-    fun storeMon(blob: ByteArray, info: Gen3Decoder.MonInfo, stepBaseline: Int) {
+    fun storeMon(blob: ByteArray, info: Gen3Decoder.MonInfo, stepBaseline: Int, routeKey: String = Routes.DEFAULT.key) {
         prefs.edit()
             .putString("raw_blob", Base64.encodeToString(blob, Base64.NO_WRAP))
             .putInt("species", info.species)
@@ -72,7 +64,12 @@ class WalkerStore(context: Context) {
             .putInt("bonus_xp", 0)
             .putString("found_items", "[]")
             .putInt("last_item_roll_steps", 0)
+            .putString("route_key", routeKey)
             .apply()
+    }
+
+    fun setRoute(routeKey: String) {
+        prefs.edit().putString("route_key", routeKey).apply()
     }
 
     fun updateSteps(currentSensorValue: Int) {
@@ -153,14 +150,15 @@ class WalkerStore(context: Context) {
         val items = loadItems().toMutableList()
         if (items.size >= 3) return  // Max 3 items per walk
 
-        var rollAt = lastRoll + 500
+        val route = getRoute()
+        val totalWeight = route.loot.sumOf { it.weight }
+        var rollAt = lastRoll + route.lootStepInterval
         while (totalSteps >= rollAt && items.size < 3) {
-            val roll = Random.nextInt(TOTAL_WEIGHT)
+            val roll = Random.nextInt(totalWeight)
             var cumulative = 0
-            for (entry in LOOT_TABLE) {
+            for (entry in route.loot) {
                 cumulative += entry.weight
                 if (roll < cumulative) {
-                    // Merge with existing or add new
                     val existing = items.indexOfFirst { it.itemId == entry.itemId }
                     if (existing >= 0) {
                         items[existing] = items[existing].copy(qty = items[existing].qty + 1)
@@ -170,7 +168,7 @@ class WalkerStore(context: Context) {
                     break
                 }
             }
-            rollAt += 500
+            rollAt += route.lootStepInterval
         }
 
         val arr = JSONArray()
@@ -183,7 +181,7 @@ class WalkerStore(context: Context) {
         }
         prefs.edit()
             .putString("found_items", arr.toString())
-            .putInt("last_item_roll_steps", (totalSteps / 500) * 500)
+            .putInt("last_item_roll_steps", (totalSteps / route.lootStepInterval) * route.lootStepInterval)
             .apply()
     }
 

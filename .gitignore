@@ -21,3 +21,13 @@ CMakeCache.txt
 CMakeFiles
 CMakeSettings.json
 version.c
+
+# Android / companion-widget
+companion-widget/build/
+companion-widget/app/build/
+companion-widget/.gradle/
+companion-widget/local.properties
+companion-widget/.idea/
+companion-widget/app/release/
+*.apk
+*.aab

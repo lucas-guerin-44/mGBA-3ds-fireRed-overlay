@@ -13,6 +13,7 @@ import com.mgba.companion.R
 import com.mgba.companion.data.PokemonData
 import com.mgba.companion.data.PokemonRepository
 import com.mgba.companion.data.SpeciesNames
+import com.mgba.companion.data.Routes
 import com.mgba.companion.data.WalkerStore
 import com.mgba.companion.walker.WalkerActivity
 import com.mgba.companion.worker.PokemonPollWorker
@@ -144,6 +145,7 @@ class PokemonWidgetProvider : AppWidgetProvider() {
             if (!showExtra) return views
 
             val parts = mutableListOf<String>()
+            parts.add(Routes.get(freshMon.routeKey).name)
             parts.add("Lv. ${freshMon.level} ${SpeciesNames.get(freshMon.species)}")
             if (freshMon.foundItems.isNotEmpty()) {
                 parts.add(freshMon.foundItems.joinToString(", ") {
