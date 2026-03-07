@@ -21,6 +21,7 @@ struct RomProfile {
 	uint32_t speciesNames;    /* species name table */
 	uint32_t moveNames;       /* move name table */
 	uint32_t learnsetTable;   /* level-up learnset pointer table */
+	uint32_t baseStats;       /* gBaseStats[] (28 bytes/entry, growth rate at +19) */
 
 	/* ROM table entry sizes */
 	uint8_t speciesNameLen;
@@ -37,6 +38,12 @@ struct RomProfile {
 	/* Badge reading: SaveBlock1 pointer lives in IWRAM */
 	uint32_t sb1PtrIwram;      /* IWRAM offset of gSaveBlock1Ptr */
 	uint32_t sb1BadgeOffset;   /* offset from SB1 base to badge flags byte */
+
+	/* Bag (offsets within SaveBlock1) */
+	/* Pocket indices: 0=Items, 1=KeyItems, 2=Pokeballs, 3=TMs, 4=Berries */
+	uint16_t sb1MoneyOffset;
+	uint16_t sb1BagPocket[5];
+	uint8_t  sb1BagSize[5];
 
 	/* Battle system (EWRAM offsets from WRAM base) */
 	uint32_t battleFlags;      /* gBattleTypeFlags (u32, non-zero = in battle) */

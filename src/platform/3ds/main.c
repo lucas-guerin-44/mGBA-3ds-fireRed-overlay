@@ -29,6 +29,8 @@
 #include "overlay.h"
 #include "romprofile.h"
 #include "netserver.h"
+#include "qrscan.h"
+#include "walker.h"
 
 #include <3ds.h>
 #include <3ds/gpu/gx.h>
@@ -157,6 +159,8 @@ static bool _initGpu(void) {
 
 static bool sShowOverlay = true;
 static bool sNetworkEnabled = true;
+static bool sQrScannerActive = false;
+static bool sWalkerActive = false;
 
 static int sOverlayBacklightOff = 0; /* which screen backlight is off (0=none) */
 static aptHookCookie sAptHookCookie;
@@ -669,6 +673,9 @@ static void _drawOverlay(struct mGUIRunner* runner) {
 			if (romprofileIsSupported() && sNetworkEnabled) {
 				netserverStart(8888);
 			}
+			/* Init QR scanner (camera + quirc) */
+			qrscanInit();
+			walkerInit();
 		}
 		/* Skip overlay entirely for ROMs that never matched any game code */
 		if (!sEverSupported && !romprofileIsSupported())
@@ -679,9 +686,6 @@ static void _drawOverlay(struct mGUIRunner* runner) {
 	if (sNetworkEnabled) {
 		netserverUpdateParty(runner);
 	}
-
-	if (!sShowOverlay)
-		return;
 
 	// Draw overlay on the screen opposite the game
 	if (screenMode >= SM_PA_TOP) {
@@ -701,9 +705,58 @@ static void _drawOverlay(struct mGUIRunner* runner) {
 		screenH = 240;
 	}
 
+	if (sQrScannerActive) {
+		/* QR scanner replaces the overlay when active */
+		static bool sQrDecoded = false;
+		if (!sQrDecoded) {
+			int decoded = qrscanPoll();
+			if (decoded) {
+				sQrDecoded = true;
+				qrscanStop();
+				qrscanApplyReward(runner);
+			}
+		}
+		qrscanDraw(runner->params.font, screenW, screenH);
+		ctrFlushBatch();
+
+		/* B exits (always), or after decode user must press B to dismiss */
+		if (sOverlayKeysDown & KEY_B) {
+			if (!sQrDecoded) {
+				qrscanStop();
+			}
+			sQrScannerActive = false;
+			sQrDecoded = false;
+		}
+		sOverlayKeysDown = 0;
+		return;
+	}
+
+	if (sWalkerActive) {
+		/* Walker QR display replaces the overlay */
+		int result = walkerPoll(sOverlayKeysDown);
+		walkerDraw(runner->params.font, screenW, screenH);
+		ctrFlushBatch();
+
+		if (result == 1) {
+			/* User confirmed send — remove mon from party */
+			walkerConfirmSend(runner);
+			sWalkerActive = false;
+		} else if (result == -1) {
+			/* User cancelled */
+			walkerCancel();
+			sWalkerActive = false;
+		}
+		sOverlayKeysDown = 0;
+		return;
+	}
+
+	if (!sShowOverlay)
+		return;
+
 	overlayDraw(runner, runner->params.font, screenW, screenH, sOverlayKeysDown);
 	sOverlayKeysDown = 0; /* consume after use */
 	ctrFlushBatch();
+
 }
 
 static void _drawFrame(struct mGUIRunner* runner, bool faded) {
@@ -723,7 +776,7 @@ static void _drawFrame(struct mGUIRunner* runner, bool faded) {
 	}
 
 	_drawTex(runner->core, faded, interframeBlending);
-	if (!faded) {
+	if (!faded || sQrScannerActive || sWalkerActive) {
 		_drawOverlay(runner);
 	}
 }
@@ -954,6 +1007,28 @@ void _3dsToggleNetwork(void) {
 		netserverStart(8888);
 	} else {
 		netserverStop();
+	}
+}
+
+void _3dsStartQrScan(void) {
+	if (qrscanIsReady()) {
+		sQrScannerActive = true;
+		qrscanStart();
+	}
+}
+
+bool _3dsIsQrScanning(void) {
+	return sQrScannerActive;
+}
+
+bool _3dsIsWalkerActive(void) {
+	return sWalkerActive;
+}
+
+void _3dsStartWalkerSend(struct mGUIRunner* runner) {
+	int slot = overlayGetSelectedSlot();
+	if (walkerStartSend(runner, slot)) {
+		sWalkerActive = true;
 	}
 }
 
@@ -1205,6 +1280,7 @@ int main() {
 	_map3DSKey(&runner.params.keyMap, KEY_CSTICK_DOWN, mGUI_INPUT_DECREASE_BRIGHTNESS);
 
 	mGUIRunloop(&runner);
+	qrscanExit();
 	netserverStop();
 	mGUIDeinit(&runner);
 

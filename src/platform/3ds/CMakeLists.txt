@@ -49,8 +49,8 @@ set_source_files_properties(
 	${CMAKE_CURRENT_BINARY_DIR}/uishader.shbin.h
 	PROPERTIES GENERATED ON)
 
-add_executable(${BINARY_NAME}.elf ${GUI_SRC} main.c overlay.c sprite.c romprofile.c battle.c netserver.c)
-set_target_properties(${BINARY_NAME}.elf PROPERTIES COMPILE_DEFINITIONS "${OS_DEFINES};${FEATURE_DEFINES};${FUNCTION_DEFINES}")
+add_executable(${BINARY_NAME}.elf ${GUI_SRC} main.c overlay.c sprite.c romprofile.c battle.c netserver.c qrscan.c walker.c quirc/quirc.c quirc/identify.c quirc/decode.c quirc/version_db.c qrcodegen/qrcodegen.c)
+set_target_properties(${BINARY_NAME}.elf PROPERTIES COMPILE_DEFINITIONS "${OS_DEFINES};${FEATURE_DEFINES};${FUNCTION_DEFINES};QUIRC_FLOAT_TYPE=float;QUIRC_USE_TGMATH;QUIRC_MAX_REGIONS=1024")
 target_link_libraries(${BINARY_NAME}.elf ${BINARY_NAME} ${M_LIBRARY} ${OS_LIB})
 
 add_custom_command(OUTPUT ${BINARY_NAME}.smdh

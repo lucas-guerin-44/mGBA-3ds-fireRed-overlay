@@ -20,6 +20,7 @@ static const struct RomProfile sProfiles[] = {
 		0x245EE0,   /* speciesNames */
 		0x247094,   /* moveNames */
 		0x25D7B4,   /* learnsetTable */
+		0x254784,   /* baseStats (gBaseStats[], 28 bytes/entry) */
 		11,         /* speciesNameLen */
 		13,         /* moveNameLen */
 		0x24029,    /* partyCount */
@@ -28,6 +29,10 @@ static const struct RomProfile sProfiles[] = {
 		{ 414, 415, 416, 417, 418, 420, 419, 350 }, /* gymLeaderIds (badge order) */
 		0x5008,     /* sb1PtrIwram (gSaveBlock1Ptr at 0x03005008) */
 		0x0FE4,     /* sb1BadgeOffset (flags@0x0EE0 + badge byte@0x104) */
+		/* Bag (offsets within SaveBlock1, from pokefirered decomp) */
+		0x0290,     /* sb1MoneyOffset */
+		{ 0x0310, 0x03B8, 0x0430, 0x0464, 0x054C }, /* sb1BagPocket */
+		{ 42, 30, 13, 58, 43 },                      /* sb1BagSize */
 		/* Battle system (from pokefirered decomp, confirmed relative to gPlayerParty) */
 		0x22B4C,    /* battleFlags (gBattleTypeFlags at 0x02022B4C) */
 		0x23BE4,    /* battleMons (gBattleMons at 0x02023BE4, 4 × 0x58) */
@@ -44,6 +49,7 @@ static const struct RomProfile sProfiles[] = {
 		0x3185C8,   /* speciesNames (gSpeciesNames) */
 		0x31977C,   /* moveNames (gMoveNames) */
 		0x32937C,   /* learnsetTable (gLevelUpLearnsets) */
+		0x3203CC,   /* baseStats (gBaseStats[], 28 bytes/entry) */
 		11,         /* speciesNameLen (same Gen 3 format) */
 		13,         /* moveNameLen (same Gen 3 format) */
 		0x244E9,    /* partyCount (gPlayerPartyCount at 0x020244E9) */
@@ -52,6 +58,10 @@ static const struct RomProfile sProfiles[] = {
 		{ 265, 266, 267, 268, 269, 270, 271, 272 }, /* gymLeaderIds: Roxanne,Brawly,Wattson,Flannery,Norman,Winona,Tate&Liza,Juan */
 		0x5D8C,     /* sb1PtrIwram (gSaveBlock1Ptr at 0x03005D8C) */
 		0x137C,     /* sb1BadgeOffset (flags@0x1270 + badge byte@0x10C, FLAG_BADGE01_GET=0x867) */
+		/* Bag (offsets within SaveBlock1, from pokeemerald decomp) */
+		0x0490,     /* sb1MoneyOffset */
+		{ 0x0560, 0x05D8, 0x0650, 0x0690, 0x0790 }, /* sb1BagPocket */
+		{ 30, 30, 16, 64, 46 },                      /* sb1BagSize */
 		/* Battle system (from pokeemerald decomp symbols branch) */
 		0x22FF0,    /* battleFlags (gBattleTypeFlags at 0x02022FF0) */
 		0x24084,    /* battleMons (gBattleMons at 0x02024084, 4 × 0x58) */
@@ -71,6 +81,7 @@ static const struct RomProfile sProfiles[] = {
 		0,          /* speciesNames (unknown) */
 		0,          /* moveNames (unknown) */
 		0,          /* learnsetTable (unknown) */
+		0,          /* baseStats (unknown) */
 		11,         /* speciesNameLen */
 		13,         /* moveNameLen */
 		0x1B95D,    /* partyCount (gPlayerPartyCount at 0x0201B95D) */
@@ -79,6 +90,9 @@ static const struct RomProfile sProfiles[] = {
 		{ 0, 0, 0, 0, 0, 0, 0, 0 }, /* gymLeaderIds (unknown) */
 		0,          /* sb1PtrIwram (unknown) */
 		0,          /* sb1BadgeOffset (unknown) */
+		0,          /* sb1MoneyOffset (unknown) */
+		{ 0, 0, 0, 0, 0 }, /* sb1BagPocket (unknown) */
+		{ 0, 0, 0, 0, 0 }, /* sb1BagSize (unknown) */
 		0,          /* battleFlags (unknown) */
 		0,          /* battleMons (unknown) */
 		0,          /* currentMove (unknown) */

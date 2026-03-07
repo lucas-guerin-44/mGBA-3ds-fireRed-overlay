@@ -1,0 +1,37 @@
+R_DEF: Internal format may change without notice
+local
+drawable widget_bg
+id btn_cancel_return
+id btn_confirm_return
+id btn_return
+id btn_scan
+id group_active
+id group_empty
+id info_column
+id interval_spinner
+id ip_input
+id pokemon_extra
+id pokemon_info
+id pokemon_name
+id pokemon_sprite
+id preview_view
+id return_info
+id return_qr
+id save_btn
+id skip_btn
+id walker_items
+id walker_level
+id walker_nickname
+id walker_species
+id walker_sprite
+id walker_steps
+id walker_xp
+id widget_root
+layout activity_config
+layout activity_return
+layout activity_scan
+layout activity_walker
+layout widget_pokemon
+string app_name
+string widget_description
+xml pokemon_widget_info

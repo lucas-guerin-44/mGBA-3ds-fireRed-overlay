@@ -1,0 +1,38 @@
+[
+    {
+        "merged": "C:\\Users\\lucag\\.gradle\\daemon\\9.0.0\\com.mgba.companion.app-debug-56:\\xml_pokemon_widget_info.xml.flat",
+        "source": "C:\\Users\\lucag\\.gradle\\daemon\\9.0.0\\com.mgba.companion.app-main-58:\\xml\\pokemon_widget_info.xml"
+    },
+    {
+        "merged": "C:\\Users\\lucag\\.gradle\\daemon\\9.0.0\\com.mgba.companion.app-debug-56:\\drawable_widget_bg.xml.flat",
+        "source": "C:\\Users\\lucag\\.gradle\\daemon\\9.0.0\\com.mgba.companion.app-main-58:\\drawable\\widget_bg.xml"
+    },
+    {
+        "merged": "C:\\Users\\lucag\\.gradle\\daemon\\9.0.0\\com.mgba.companion.app-debug-56:\\layout_activity_scan.xml.flat",
+        "source": "C:\\Users\\lucag\\.gradle\\daemon\\9.0.0\\com.mgba.companion.app-main-58:\\layout\\activity_scan.xml"
+    },
+    {
+        "merged": "C:\\Users\\lucag\\.gradle\\daemon\\9.0.0\\com.mgba.companion.app-debug-56:\\layout_activity_config.xml.flat",
+        "source": "C:\\Users\\lucag\\.gradle\\daemon\\9.0.0\\com.mgba.companion.app-main-58:\\layout\\activity_config.xml"
+    },
+    {
+        "merged": "com.mgba.companion.app-debug-56:/xml_pokemon_widget_info.xml.flat",
+        "source": "com.mgba.companion.app-main-58:/xml/pokemon_widget_info.xml"
+    },
+    {
+        "merged": "C:\\Users\\lucag\\.gradle\\daemon\\9.0.0\\com.mgba.companion.app-debug-56:\\layout_activity_walker.xml.flat",
+        "source": "C:\\Users\\lucag\\.gradle\\daemon\\9.0.0\\com.mgba.companion.app-main-58:\\layout\\activity_walker.xml"
+    },
+    {
+        "merged": "com.mgba.companion.app-debug-56:/layout_activity_config.xml.flat",
+        "source": "com.mgba.companion.app-main-58:/layout/activity_config.xml"
+    },
+    {
+        "merged": "C:\\Users\\lucag\\.gradle\\daemon\\9.0.0\\com.mgba.companion.app-debug-56:\\layout_activity_return.xml.flat",
+        "source": "C:\\Users\\lucag\\.gradle\\daemon\\9.0.0\\com.mgba.companion.app-main-58:\\layout\\activity_return.xml"
+    },
+    {
+        "merged": "C:\\Users\\lucag\\.gradle\\daemon\\9.0.0\\com.mgba.companion.app-debug-56:\\layout_widget_pokemon.xml.flat",
+        "source": "C:\\Users\\lucag\\.gradle\\daemon\\9.0.0\\com.mgba.companion.app-main-58:\\layout\\widget_pokemon.xml"
+    }
+]

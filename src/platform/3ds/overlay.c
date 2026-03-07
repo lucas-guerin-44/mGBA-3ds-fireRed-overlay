@@ -872,3 +872,7 @@ void overlayDraw(struct mGUIRunner* runner, struct GUIFont* font,
 	              GUI_ALIGN_HCENTER, CLR_DARK, "GBA core not available");
 #endif
 }
+
+int overlayGetSelectedSlot(void) {
+	return sOverlayMode;
+}

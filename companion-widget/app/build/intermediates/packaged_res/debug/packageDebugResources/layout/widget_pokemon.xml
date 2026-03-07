@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:orientation="horizontal"
+    android:padding="8dp"
+    android:gravity="center_vertical">
+
+    <!-- Sprite (always visible) -->
+    <ImageView
+        android:id="@+id/pokemon_sprite"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:scaleType="fitCenter" />
+
+    <!-- Info column (hidden at 1x1) -->
+    <LinearLayout
+        android:id="@+id/info_column"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="8dp"
+        android:orientation="vertical">
+
+        <!-- Nickname -->
+        <TextView
+            android:id="@+id/pokemon_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="CHARIZARD"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <!-- Lv + HP% -->
+        <TextView
+            android:id="@+id/pokemon_info"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="Lv. 42 · 89% HP"
+            android:textColor="#C0C0C0"
+            android:textSize="13sp"
+            android:maxLines="1" />
+
+        <!-- Status + timestamp (hidden at 2x1, visible at 3x1+) -->
+        <TextView
+            android:id="@+id/pokemon_extra"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text=""
+            android:textColor="#808080"
+            android:textSize="11sp"
+            android:maxLines="1" />
+
+    </LinearLayout>
+
+</LinearLayout>
