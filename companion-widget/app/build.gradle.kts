@@ -49,4 +49,11 @@ dependencies {
 
     // ZXing (QR code generation)
     implementation("com.google.zxing:core:3.5.3")
+
+    // Health Connect (step data from Mi Fit / Zepp and other fitness apps)
+    implementation("androidx.health.connect:connect-client:1.1.0-alpha10")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+
+    // Guava: resolve ListenableFuture conflict between Health Connect and CameraX
+    implementation("com.google.guava:guava:32.1.3-android")
 }

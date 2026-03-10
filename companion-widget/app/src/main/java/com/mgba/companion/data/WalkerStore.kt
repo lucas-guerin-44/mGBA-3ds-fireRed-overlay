@@ -100,6 +100,15 @@ class WalkerStore(context: Context) {
         rollItems(slot, newTotal)
     }
 
+    /** Set total steps directly (e.g. from Health Connect), bypassing the sensor baseline. */
+    fun updateStepsDirectlyForSlot(slot: Int, totalSteps: Int) {
+        prefs.edit()
+            .putInt(key(slot, "total_steps"), totalSteps)
+            .putInt(key(slot, "bonus_xp"), calculateXp(slot, totalSteps))
+            .apply()
+        rollItems(slot, totalSteps)
+    }
+
     fun recalculateXpForSlot(slot: Int) {
         val steps = prefs.getInt(key(slot, "total_steps"), 0)
         prefs.edit().putInt(key(slot, "bonus_xp"), calculateXp(slot, steps)).apply()

@@ -11,72 +11,52 @@ import android.os.Handler
 import android.os.HandlerThread
 import androidx.work.*
 import com.mgba.companion.data.Gen3Decoder
+import com.mgba.companion.data.HealthConnectHelper
 import com.mgba.companion.data.WalkerStore
 import com.mgba.companion.widget.PokemonWidgetProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 /**
- * Periodic background worker that reads the step counter sensor,
+ * Periodic background worker that reads the step counter sensor and Health Connect,
  * updates walk progress for all active slots, and refreshes widgets.
  */
 class StepWorker(
     context: Context,
     params: WorkerParameters
-) : Worker(context, params) {
+) : CoroutineWorker(context, params) {
 
-    override fun doWork(): Result {
+    override suspend fun doWork(): Result {
         val store = WalkerStore(applicationContext)
         if (!store.hasActiveMon()) return Result.success()
 
-        // Read step counter sensor
-        val sensorManager = applicationContext.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
-        val stepSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
+        val stepValue = readSensorSteps()
+        val hcAvailable = HealthConnectHelper.isAvailable(applicationContext)
 
-        val stepValue: Int
-        if (stepSensor != null) {
-            val latch = CountDownLatch(1)
-            var raw = -1
-
-            val handlerThread = HandlerThread("step-sensor-thread")
-            handlerThread.start()
-            val handler = Handler(handlerThread.looper)
-
-            val listener = object : SensorEventListener {
-                override fun onSensorChanged(event: SensorEvent?) {
-                    if (event?.sensor?.type == Sensor.TYPE_STEP_COUNTER) {
-                        raw = event.values[0].toInt()
-                        sensorManager.unregisterListener(this)
-                        latch.countDown()
-                    }
-                }
-                override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
-            }
-
-            sensorManager.registerListener(listener, stepSensor, SensorManager.SENSOR_DELAY_FASTEST, handler)
-            latch.await(5, TimeUnit.SECONDS)
-            sensorManager.unregisterListener(listener)
-            handlerThread.quit()
-            stepValue = raw
-        } else {
-            stepValue = -1
-        }
-
-        // Update every occupied slot
         for (slot in 0 until WalkerStore.SLOT_COUNT) {
             val mon = store.getMonInSlot(slot) ?: continue
+
+            // Health Connect: query steps since this mon was sent out
+            val hcSteps: Long = if (hcAvailable) {
+                HealthConnectHelper.readStepsSince(applicationContext, mon.sentAt)
+            } else -1L
+
             if (stepValue >= 0) {
                 if (mon.stepBaseline == 0) {
-                    // First reading for this slot — set baseline
+                    // First sensor reading — set baseline
                     val info = Gen3Decoder.decode(mon.rawBlob)
-                    if (info != null) {
-                        store.storeMonInSlot(slot, mon.rawBlob, info, stepValue)
-                    }
+                    if (info != null) store.storeMonInSlot(slot, mon.rawBlob, info, stepValue)
                 } else {
-                    store.updateStepsForSlot(slot, stepValue)
+                    val sensorTotal = (stepValue - mon.stepBaseline).coerceAtLeast(0)
+                    val best = if (hcSteps > sensorTotal) hcSteps.toInt() else sensorTotal
+                    store.updateStepsDirectlyForSlot(slot, best)
                 }
+            } else if (hcSteps >= 0) {
+                // No hardware sensor — use Health Connect alone
+                store.updateStepsDirectlyForSlot(slot, hcSteps.toInt())
             } else {
-                // No sensor — still recalculate passive XP
                 store.recalculateXpForSlot(slot)
             }
         }
@@ -89,6 +69,36 @@ class StepWorker(
         PokemonWidgetProvider.updateWidgets(applicationContext, manager, ids)
 
         return Result.success()
+    }
+
+    private suspend fun readSensorSteps(): Int = withContext(Dispatchers.IO) {
+        val sensorManager = applicationContext.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+        val stepSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
+            ?: return@withContext -1
+
+        val latch = CountDownLatch(1)
+        var raw = -1
+
+        val handlerThread = HandlerThread("step-sensor-thread")
+        handlerThread.start()
+        val handler = Handler(handlerThread.looper)
+
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent?) {
+                if (event?.sensor?.type == Sensor.TYPE_STEP_COUNTER) {
+                    raw = event.values[0].toInt()
+                    sensorManager.unregisterListener(this)
+                    latch.countDown()
+                }
+            }
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+        }
+
+        sensorManager.registerListener(listener, stepSensor, SensorManager.SENSOR_DELAY_FASTEST, handler)
+        latch.await(5, TimeUnit.SECONDS)
+        sensorManager.unregisterListener(listener)
+        handlerThread.quit()
+        raw
     }
 
     companion object {

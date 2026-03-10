@@ -1,7 +1,9 @@
 package com.mgba.companion.walker
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -14,15 +16,24 @@ import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.PermissionController
+import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.StepsRecord
+import androidx.lifecycle.lifecycleScope
 import com.mgba.companion.R
+import com.mgba.companion.data.HealthConnectHelper
 import com.mgba.companion.data.PokemonRepository
 import com.mgba.companion.data.Routes
 import com.mgba.companion.data.SpeciesNames
 import com.mgba.companion.data.WalkerStore
 import com.mgba.companion.scanner.ScanActivity
 import com.mgba.companion.worker.StepWorker
+import kotlinx.coroutines.launch
 
 class WalkerActivity : AppCompatActivity(), SensorEventListener {
 
@@ -37,11 +48,28 @@ class WalkerActivity : AppCompatActivity(), SensorEventListener {
     /** Inflated card views indexed by slot (0, 1, 2). */
     private val cardViews = arrayOfNulls<View>(WalkerStore.SLOT_COUNT)
 
+    private val activityRecognitionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (!granted) {
+            Toast.makeText(this, "Step counting requires Activity Recognition permission", Toast.LENGTH_LONG).show()
+        } else if (store.hasAnyActiveMon()) {
+            registerStepSensor()
+        }
+    }
+
+    private val healthConnectLauncher = registerForActivityResult(
+        PermissionController.createRequestPermissionResultContract()
+    ) { granted ->
+        if (granted.contains(HealthPermission.getReadPermission(StepsRecord::class))) {
+            syncFromHealthConnect()
+        }
+    }
+
     private val scanLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == RESULT_OK) {
-            initStepBaseline(pendingSlot)
             StepWorker.schedule(this)
         }
         refreshUI()
@@ -65,6 +93,22 @@ class WalkerActivity : AppCompatActivity(), SensorEventListener {
         store = WalkerStore(this)
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as? SensorManager
         stepSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION)
+            != PackageManager.PERMISSION_GRANTED) {
+            activityRecognitionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+        }
+
+        if (HealthConnectHelper.isAvailable(this)) {
+            lifecycleScope.launch {
+                val client = HealthConnectClient.getOrCreate(this@WalkerActivity)
+                val required = setOf(HealthPermission.getReadPermission(StepsRecord::class))
+                val granted = client.permissionController.getGrantedPermissions()
+                if (!granted.containsAll(required)) {
+                    healthConnectLauncher.launch(required)
+                }
+            }
+        }
 
         val container = findViewById<LinearLayout>(R.id.slots_container)
         val inflater = LayoutInflater.from(this)
@@ -104,12 +148,51 @@ class WalkerActivity : AppCompatActivity(), SensorEventListener {
         super.onResume()
         if (store.hasAnyActiveMon()) {
             store.recalculateAllXp()
-            if (stepSensor != null) {
-                sensorManager?.registerListener(this, stepSensor, SensorManager.SENSOR_DELAY_UI)
-                sensorRegistered = true
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION)
+                == PackageManager.PERMISSION_GRANTED) {
+                registerStepSensor()
             }
+            syncFromHealthConnect()
         }
         refreshUI()
+    }
+
+    private fun syncFromHealthConnect() {
+        if (!HealthConnectHelper.isAvailable(this)) {
+            Toast.makeText(this, "Health Connect not found — install it to sync Mi Fit steps", Toast.LENGTH_LONG).show()
+            return
+        }
+        lifecycleScope.launch {
+            var anyUpdate = false
+            for (slot in 0 until WalkerStore.SLOT_COUNT) {
+                val mon = store.getMonInSlot(slot) ?: continue
+                val hcSteps = HealthConnectHelper.readStepsSince(this@WalkerActivity, mon.sentAt)
+                when {
+                    hcSteps < 0 -> Toast.makeText(
+                        this@WalkerActivity,
+                        "Slot ${slot + 1}: Health Connect read failed — is Read Steps permission granted?",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    hcSteps == 0L -> Toast.makeText(
+                        this@WalkerActivity,
+                        "Slot ${slot + 1}: Health Connect returned 0 steps — is Mi Fitness connected to Health Connect?",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    hcSteps > mon.totalSteps -> {
+                        store.updateStepsDirectlyForSlot(slot, hcSteps.toInt())
+                        anyUpdate = true
+                    }
+                }
+            }
+            if (anyUpdate) refreshUI()
+        }
+    }
+
+    private fun registerStepSensor() {
+        if (stepSensor != null && !sensorRegistered) {
+            sensorManager?.registerListener(this, stepSensor, SensorManager.SENSOR_DELAY_UI)
+            sensorRegistered = true
+        }
     }
 
     override fun onPause() {
@@ -125,8 +208,13 @@ class WalkerActivity : AppCompatActivity(), SensorEventListener {
             val value = event.values[0].toInt()
             for (slot in 0 until WalkerStore.SLOT_COUNT) {
                 val mon = store.getMonInSlot(slot) ?: continue
-                if (mon.stepBaseline == 0) continue  // baseline not yet set, skip
-                store.updateStepsForSlot(slot, value)
+                if (mon.stepBaseline == 0) {
+                    // Baseline never set (e.g. permission was missing at scan time) — set it now
+                    val info = com.mgba.companion.data.Gen3Decoder.decode(mon.rawBlob)
+                    if (info != null) store.storeMonInSlot(slot, mon.rawBlob, info, value)
+                } else {
+                    store.updateStepsForSlot(slot, value)
+                }
             }
             refreshUI()
         }
@@ -149,26 +237,6 @@ class WalkerActivity : AppCompatActivity(), SensorEventListener {
             }
             .setNegativeButton("Cancel", null)
             .show()
-    }
-
-    private fun initStepBaseline(slot: Int) {
-        if (stepSensor == null) return
-        sensorManager?.registerListener(object : SensorEventListener {
-            override fun onSensorChanged(event: SensorEvent?) {
-                if (event?.sensor?.type == Sensor.TYPE_STEP_COUNTER) {
-                    val current = event.values[0].toInt()
-                    val mon = store.getMonInSlot(slot)
-                    if (mon != null && mon.stepBaseline == 0) {
-                        val info = com.mgba.companion.data.Gen3Decoder.decode(mon.rawBlob)
-                        if (info != null) {
-                            store.storeMonInSlot(slot, mon.rawBlob, info, current)
-                        }
-                    }
-                    sensorManager?.unregisterListener(this)
-                }
-            }
-            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
-        }, stepSensor, SensorManager.SENSOR_DELAY_FASTEST)
     }
 
     private fun refreshUI() {
