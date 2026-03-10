@@ -1,5 +1,7 @@
 package com.mgba.companion.worker
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
@@ -7,10 +9,11 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
+import androidx.core.app.NotificationCompat
 import androidx.work.*
-import com.mgba.companion.data.Gen3Decoder
 import com.mgba.companion.data.HealthConnectHelper
 import com.mgba.companion.data.WalkerStore
 import com.mgba.companion.widget.PokemonWidgetProvider
@@ -32,6 +35,8 @@ class StepWorker(
         val store = WalkerStore(applicationContext)
         if (!store.hasActiveMon()) return Result.success()
 
+        setForeground(createForegroundInfo())
+
         val stepValue = readSensorSteps()
         val hcAvailable = HealthConnectHelper.isAvailable(applicationContext)
 
@@ -45,9 +50,8 @@ class StepWorker(
 
             if (stepValue >= 0) {
                 if (mon.stepBaseline == 0) {
-                    // First sensor reading — set baseline
-                    val info = Gen3Decoder.decode(mon.rawBlob)
-                    if (info != null) store.storeMonInSlot(slot, mon.rawBlob, info, stepValue)
+                    // First sensor reading — set baseline without resetting steps/items/sentAt
+                    store.setStepBaselineForSlot(slot, stepValue)
                 } else {
                     val sensorTotal = (stepValue - mon.stepBaseline).coerceAtLeast(0)
                     val best = if (hcSteps > sensorTotal) hcSteps.toInt() else sensorTotal
@@ -99,6 +103,23 @@ class StepWorker(
         sensorManager.unregisterListener(listener)
         handlerThread.quit()
         raw
+    }
+
+    private fun createForegroundInfo(): ForegroundInfo {
+        val channelId = "walker_steps_channel"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId, "Walker Steps", NotificationManager.IMPORTANCE_LOW
+            )
+            applicationContext.getSystemService(NotificationManager::class.java)
+                ?.createNotificationChannel(channel)
+        }
+        val notification = NotificationCompat.Builder(applicationContext, channelId)
+            .setContentTitle("Counting steps…")
+            .setSmallIcon(android.R.drawable.ic_menu_compass)
+            .setOngoing(true)
+            .build()
+        return ForegroundInfo(1, notification)
     }
 
     companion object {

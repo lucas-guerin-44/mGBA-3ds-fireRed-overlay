@@ -168,16 +168,6 @@ class WalkerActivity : AppCompatActivity(), SensorEventListener {
                 val mon = store.getMonInSlot(slot) ?: continue
                 val hcSteps = HealthConnectHelper.readStepsSince(this@WalkerActivity, mon.sentAt)
                 when {
-                    hcSteps < 0 -> Toast.makeText(
-                        this@WalkerActivity,
-                        "Slot ${slot + 1}: Health Connect read failed — is Read Steps permission granted?",
-                        Toast.LENGTH_LONG
-                    ).show()
-                    hcSteps == 0L -> Toast.makeText(
-                        this@WalkerActivity,
-                        "Slot ${slot + 1}: Health Connect returned 0 steps — is Mi Fitness connected to Health Connect?",
-                        Toast.LENGTH_LONG
-                    ).show()
                     hcSteps > mon.totalSteps -> {
                         store.updateStepsDirectlyForSlot(slot, hcSteps.toInt())
                         anyUpdate = true
@@ -209,9 +199,8 @@ class WalkerActivity : AppCompatActivity(), SensorEventListener {
             for (slot in 0 until WalkerStore.SLOT_COUNT) {
                 val mon = store.getMonInSlot(slot) ?: continue
                 if (mon.stepBaseline == 0) {
-                    // Baseline never set (e.g. permission was missing at scan time) — set it now
-                    val info = com.mgba.companion.data.Gen3Decoder.decode(mon.rawBlob)
-                    if (info != null) store.storeMonInSlot(slot, mon.rawBlob, info, value)
+                    // Baseline never set — set it now without resetting steps/items/sentAt
+                    store.setStepBaselineForSlot(slot, value)
                 } else {
                     store.updateStepsForSlot(slot, value)
                 }

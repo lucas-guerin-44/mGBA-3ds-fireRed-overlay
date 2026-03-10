@@ -1,6 +1,7 @@
 package com.mgba.companion.data
 
 import android.content.Context
+import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
@@ -30,6 +31,7 @@ object HealthConnectHelper {
             )
             response.records.sumOf { it.count }
         } catch (e: Exception) {
+            Log.e("HealthConnect", "readStepsSince failed: ${e::class.simpleName}: ${e.message}", e)
             -1L
         }
     }

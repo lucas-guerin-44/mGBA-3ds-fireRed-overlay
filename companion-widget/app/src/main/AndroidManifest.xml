@@ -8,6 +8,8 @@
 
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
@@ -56,6 +58,24 @@
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
             </intent-filter>
         </activity>
+
+        <!-- Required by Health Connect to grant read permissions -->
+        <activity
+            android:name="androidx.health.connect.client.PermissionController"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+            <meta-data
+                android:name="health_connect_privacy_policy_url"
+                android:value="https://github.com" />
+        </activity>
+
+        <!-- WorkManager foreground service for background step counting -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="health"
+            android:exported="false" />
 
         <receiver
             android:name=".widget.PokemonWidgetProvider"

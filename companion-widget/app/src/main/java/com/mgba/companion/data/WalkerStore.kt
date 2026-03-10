@@ -86,6 +86,11 @@ class WalkerStore(context: Context) {
             .apply()
     }
 
+    /** Only update the step baseline — does NOT reset steps, XP, items, or sentAt. */
+    fun setStepBaselineForSlot(slot: Int, baseline: Int) {
+        prefs.edit().putInt(key(slot, "step_baseline"), baseline).apply()
+    }
+
     fun setRouteForSlot(slot: Int, routeKey: String) {
         prefs.edit().putString(key(slot, "route_key"), routeKey).apply()
     }
