@@ -17,16 +17,21 @@ import com.mgba.companion.data.WalkerStore
 
 class ReturnActivity : AppCompatActivity() {
 
+    companion object {
+        const val EXTRA_SLOT = "slot"
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_return)
 
+        val slot = intent.getIntExtra(EXTRA_SLOT, 0)
         val store = WalkerStore(this)
-        val mon = store.getActiveMon()
-        val payload = store.buildReturnPayload()
+        val mon = store.getMonInSlot(slot)
+        val payload = store.buildReturnPayloadForSlot(slot)
 
         if (mon == null || payload == null) {
-            Toast.makeText(this, "No active walker mon", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "No active walker mon in slot ${slot + 1}", Toast.LENGTH_SHORT).show()
             finish()
             return
         }
@@ -58,7 +63,7 @@ class ReturnActivity : AppCompatActivity() {
                 .setTitle("Confirm Return")
                 .setMessage("Has the 3DS scanned this QR code?")
                 .setPositiveButton("Yes, mon returned") { _, _ ->
-                    store.clearMon()
+                    store.clearMonInSlot(slot)
                     Toast.makeText(this, "${mon.nickname} returned to the game!", Toast.LENGTH_LONG).show()
                     setResult(RESULT_OK)
                     finish()

@@ -8,9 +8,11 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.app.AlertDialog
 import android.os.Bundle
+import android.view.LayoutInflater
 import android.view.View
 import android.widget.Button
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -29,12 +31,17 @@ class WalkerActivity : AppCompatActivity(), SensorEventListener {
     private var stepSensor: Sensor? = null
     private var sensorRegistered = false
 
+    /** Slot index that triggered the current pending scan/return launch. */
+    private var pendingSlot = 0
+
+    /** Inflated card views indexed by slot (0, 1, 2). */
+    private val cardViews = arrayOfNulls<View>(WalkerStore.SLOT_COUNT)
+
     private val scanLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == RESULT_OK) {
-            // Mon received, set step baseline from current sensor and refresh
-            initStepBaseline()
+            initStepBaseline(pendingSlot)
             StepWorker.schedule(this)
         }
         refreshUI()
@@ -44,7 +51,9 @@ class WalkerActivity : AppCompatActivity(), SensorEventListener {
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == RESULT_OK) {
-            StepWorker.cancel(this)
+            if (!store.hasAnyActiveMon()) {
+                StepWorker.cancel(this)
+            }
         }
         refreshUI()
     }
@@ -57,16 +66,35 @@ class WalkerActivity : AppCompatActivity(), SensorEventListener {
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as? SensorManager
         stepSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
 
-        findViewById<Button>(R.id.btn_scan).setOnClickListener {
-            scanLauncher.launch(Intent(this, ScanActivity::class.java))
-        }
+        val container = findViewById<LinearLayout>(R.id.slots_container)
+        val inflater = LayoutInflater.from(this)
 
-        findViewById<Button>(R.id.btn_return).setOnClickListener {
-            returnLauncher.launch(Intent(this, ReturnActivity::class.java))
-        }
+        for (slot in 0 until WalkerStore.SLOT_COUNT) {
+            val card = inflater.inflate(R.layout.layout_slot_card, container, false)
+            cardViews[slot] = card
+            container.addView(card)
 
-        findViewById<Button>(R.id.btn_change_route).setOnClickListener {
-            showRoutePicker()
+            card.findViewById<TextView>(R.id.slot_label).text = "Slot ${slot + 1}"
+
+            card.findViewById<Button>(R.id.btn_scan).setOnClickListener {
+                pendingSlot = slot
+                scanLauncher.launch(
+                    Intent(this, ScanActivity::class.java)
+                        .putExtra(ScanActivity.EXTRA_SLOT, slot)
+                )
+            }
+
+            card.findViewById<Button>(R.id.btn_return).setOnClickListener {
+                pendingSlot = slot
+                returnLauncher.launch(
+                    Intent(this, ReturnActivity::class.java)
+                        .putExtra(ReturnActivity.EXTRA_SLOT, slot)
+                )
+            }
+
+            card.findViewById<Button>(R.id.btn_change_route).setOnClickListener {
+                showRoutePicker(slot)
+            }
         }
 
         refreshUI()
@@ -74,9 +102,8 @@ class WalkerActivity : AppCompatActivity(), SensorEventListener {
 
     override fun onResume() {
         super.onResume()
-        if (store.hasActiveMon()) {
-            // Recalculate passive XP immediately
-            store.recalculateXp()
+        if (store.hasAnyActiveMon()) {
+            store.recalculateAllXp()
             if (stepSensor != null) {
                 sensorManager?.registerListener(this, stepSensor, SensorManager.SENSOR_DELAY_UI)
                 sensorRegistered = true
@@ -95,23 +122,28 @@ class WalkerActivity : AppCompatActivity(), SensorEventListener {
 
     override fun onSensorChanged(event: SensorEvent?) {
         if (event?.sensor?.type == Sensor.TYPE_STEP_COUNTER) {
-            store.updateSteps(event.values[0].toInt())
+            val value = event.values[0].toInt()
+            for (slot in 0 until WalkerStore.SLOT_COUNT) {
+                if (store.hasMonInSlot(slot)) {
+                    store.updateStepsForSlot(slot, value)
+                }
+            }
             refreshUI()
         }
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
-    private fun showRoutePicker() {
+    private fun showRoutePicker(slot: Int) {
         val routes = Routes.all()
         val names: Array<CharSequence> = routes.map { "${it.name} — ${it.description}" }.toTypedArray()
-        val mon = store.getActiveMon()
+        val mon = store.getMonInSlot(slot)
         val currentIdx = routes.indexOfFirst { it.key == mon?.routeKey }.coerceAtLeast(0)
 
         AlertDialog.Builder(this)
-            .setTitle("Choose Route")
+            .setTitle("Choose Route — Slot ${slot + 1}")
             .setSingleChoiceItems(names, currentIdx) { dialog, which ->
-                store.setRoute(routes[which].key)
+                store.setRouteForSlot(slot, routes[which].key)
                 refreshUI()
                 dialog.dismiss()
             }
@@ -119,76 +151,85 @@ class WalkerActivity : AppCompatActivity(), SensorEventListener {
             .show()
     }
 
-    private fun initStepBaseline() {
-        // Read current step counter value and set as baseline
-        if (stepSensor != null) {
-            // We'll register briefly to get the current value
-            // The StepWorker will also handle this on first run
-            sensorManager?.registerListener(object : SensorEventListener {
-                override fun onSensorChanged(event: SensorEvent?) {
-                    if (event?.sensor?.type == Sensor.TYPE_STEP_COUNTER) {
-                        val current = event.values[0].toInt()
-                        val mon = store.getActiveMon()
-                        if (mon != null && mon.stepBaseline == 0) {
-                            // Re-store with proper baseline
-                            val info = com.mgba.companion.data.Gen3Decoder.decode(mon.rawBlob)
-                            if (info != null) {
-                                store.storeMon(mon.rawBlob, info, current)
-                            }
+    private fun initStepBaseline(slot: Int) {
+        if (stepSensor == null) return
+        sensorManager?.registerListener(object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent?) {
+                if (event?.sensor?.type == Sensor.TYPE_STEP_COUNTER) {
+                    val current = event.values[0].toInt()
+                    val mon = store.getMonInSlot(slot)
+                    if (mon != null && mon.stepBaseline == 0) {
+                        val info = com.mgba.companion.data.Gen3Decoder.decode(mon.rawBlob)
+                        if (info != null) {
+                            store.storeMonInSlot(slot, mon.rawBlob, info, current)
                         }
-                        sensorManager?.unregisterListener(this)
                     }
+                    sensorManager?.unregisterListener(this)
                 }
-                override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
-            }, stepSensor, SensorManager.SENSOR_DELAY_FASTEST)
-        }
+            }
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+        }, stepSensor, SensorManager.SENSOR_DELAY_FASTEST)
     }
 
     private fun refreshUI() {
-        val emptyGroup = findViewById<View>(R.id.group_empty)
-        val activeGroup = findViewById<View>(R.id.group_active)
-
-        val mon = store.getActiveMon()
-        if (mon == null) {
-            emptyGroup.visibility = View.VISIBLE
-            activeGroup.visibility = View.GONE
-            return
-        }
-
-        emptyGroup.visibility = View.GONE
-        activeGroup.visibility = View.VISIBLE
-
-        val route = Routes.get(mon.routeKey)
-        findViewById<TextView>(R.id.walker_route).text = route.name
-
-        findViewById<TextView>(R.id.walker_nickname).text = mon.nickname
-        findViewById<TextView>(R.id.walker_level).text = "Lv. ${mon.level}"
-        findViewById<TextView>(R.id.walker_species).text = SpeciesNames.get(mon.species)
-        findViewById<TextView>(R.id.walker_steps).text = "${mon.totalSteps} steps"
-        findViewById<TextView>(R.id.walker_xp).text = "+${mon.bonusXp} XP"
-
-        val itemsView = findViewById<TextView>(R.id.walker_items)
-        if (mon.foundItems.isEmpty()) {
-            itemsView.text = "No items found yet"
-        } else {
-            itemsView.text = mon.foundItems.joinToString("\n") { "${it.name} x${it.qty}" }
-        }
-
-        // Load sprite
-        val spriteView = findViewById<ImageView>(R.id.walker_sprite)
         val repo = PokemonRepository(this)
-        val sprite = repo.getCachedSprite(this, mon.species)
-        if (sprite != null) {
-            spriteView.setImageBitmap(sprite)
-        }
-        // Also try to fetch in background if not cached
-        if (sprite == null) {
-            Thread {
-                val fetched = repo.fetchAndCacheSprite(this, mon.species)
-                if (fetched != null) {
-                    runOnUiThread { spriteView.setImageBitmap(fetched) }
-                }
-            }.start()
+
+        for (slot in 0 until WalkerStore.SLOT_COUNT) {
+            val card = cardViews[slot] ?: continue
+            val mon = store.getMonInSlot(slot)
+
+            val emptyHint = card.findViewById<TextView>(R.id.card_empty_hint)
+            val scanBtn = card.findViewById<Button>(R.id.btn_scan)
+            val activeContent = card.findViewById<View>(R.id.card_active_content)
+            val routeRow = card.findViewById<View>(R.id.card_route_row)
+            val itemsView = card.findViewById<TextView>(R.id.slot_items)
+            val returnBtn = card.findViewById<Button>(R.id.btn_return)
+
+            if (mon == null) {
+                emptyHint.visibility = View.VISIBLE
+                scanBtn.visibility = View.VISIBLE
+                activeContent.visibility = View.GONE
+                routeRow.visibility = View.GONE
+                itemsView.visibility = View.GONE
+                card.findViewById<View>(R.id.card_divider).visibility = View.GONE
+                returnBtn.visibility = View.GONE
+                continue
+            }
+
+            emptyHint.visibility = View.GONE
+            scanBtn.visibility = View.GONE
+            activeContent.visibility = View.VISIBLE
+            routeRow.visibility = View.VISIBLE
+            itemsView.visibility = View.VISIBLE
+            returnBtn.visibility = View.VISIBLE
+
+            card.findViewById<TextView>(R.id.slot_nickname).text = mon.nickname
+            card.findViewById<TextView>(R.id.slot_level).text = "Lv. ${mon.level}"
+            card.findViewById<TextView>(R.id.slot_species).text = SpeciesNames.get(mon.species)
+            card.findViewById<TextView>(R.id.slot_route).text = Routes.get(mon.routeKey).name
+            card.findViewById<TextView>(R.id.slot_steps).text = "%,d".format(mon.totalSteps)
+            card.findViewById<TextView>(R.id.slot_xp).text = "+${mon.bonusXp} XP"
+
+            itemsView.text = if (mon.foundItems.isEmpty()) {
+                "No items yet"
+            } else {
+                mon.foundItems.joinToString("  ·  ") { "${it.name} x${it.qty}" }
+            }
+
+            card.findViewById<View>(R.id.card_divider).visibility = View.VISIBLE
+
+            val spriteView = card.findViewById<ImageView>(R.id.slot_sprite)
+            val sprite = repo.getCachedSprite(this, mon.species)
+            if (sprite != null) {
+                spriteView.setImageBitmap(sprite)
+            } else {
+                Thread {
+                    val fetched = repo.fetchAndCacheSprite(this, mon.species)
+                    if (fetched != null) {
+                        runOnUiThread { spriteView.setImageBitmap(fetched) }
+                    }
+                }.start()
+            }
         }
     }
 }

@@ -24,11 +24,18 @@ import java.util.concurrent.Executors
 
 class ScanActivity : AppCompatActivity() {
 
+    companion object {
+        const val EXTRA_SLOT = "slot"
+    }
+
     private var scanned = false
+    private var targetSlot = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_scan)
+
+        targetSlot = intent.getIntExtra(EXTRA_SLOT, 0)
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
             != PackageManager.PERMISSION_GRANTED) {
@@ -150,16 +157,16 @@ class ScanActivity : AppCompatActivity() {
         }
 
         val store = WalkerStore(this)
-        if (store.hasActiveMon()) {
+        if (store.hasMonInSlot(targetSlot)) {
             runOnUiThread {
-                Toast.makeText(this, "Already walking a Pokemon! Return it first.", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Slot ${targetSlot + 1} already has a Pokemon! Return it first.", Toast.LENGTH_LONG).show()
                 scanned = false
             }
             return
         }
 
         // Step baseline: 0 for now, StepWorker will set the real baseline on first run
-        store.storeMon(partySlot, info, 0)
+        store.storeMonInSlot(targetSlot, partySlot, info, 0)
 
         runOnUiThread {
             Toast.makeText(this, "Received ${info.nickname} (Lv.${info.level})!", Toast.LENGTH_LONG).show()
