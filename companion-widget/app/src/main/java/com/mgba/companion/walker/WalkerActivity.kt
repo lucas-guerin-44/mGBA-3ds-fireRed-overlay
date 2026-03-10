@@ -124,9 +124,9 @@ class WalkerActivity : AppCompatActivity(), SensorEventListener {
         if (event?.sensor?.type == Sensor.TYPE_STEP_COUNTER) {
             val value = event.values[0].toInt()
             for (slot in 0 until WalkerStore.SLOT_COUNT) {
-                if (store.hasMonInSlot(slot)) {
-                    store.updateStepsForSlot(slot, value)
-                }
+                val mon = store.getMonInSlot(slot) ?: continue
+                if (mon.stepBaseline == 0) continue  // baseline not yet set, skip
+                store.updateStepsForSlot(slot, value)
             }
             refreshUI()
         }
