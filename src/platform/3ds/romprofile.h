@@ -45,11 +45,6 @@ struct RomProfile {
 	uint16_t sb1BagPocket[5];
 	uint8_t  sb1BagSize[5];
 
-	/* Battle system (EWRAM offsets from WRAM base) */
-	uint32_t battleFlags;      /* gBattleTypeFlags (u32, non-zero = in battle) */
-	uint32_t battleMons;       /* gBattleMons[] (4 entries × 0x58 bytes each) */
-	uint32_t currentMove;      /* gCurrentMove (u16) */
-	uint32_t battlerAttacker;  /* gBattlerAttacker (u8, 0=player 1=opponent) */
 };
 
 /* Call once when ROM is available. Matches ROM header and sets active profile.

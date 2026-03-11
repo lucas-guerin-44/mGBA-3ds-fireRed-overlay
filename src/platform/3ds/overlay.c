@@ -12,7 +12,6 @@
 #include "overlay.h"
 #include "sprite.h"
 #include "romprofile.h"
-#include "battle.h"
 
 #include <mgba/core/core.h>
 #ifdef M_CORE_GBA
@@ -752,10 +751,6 @@ void overlayDraw(struct mGUIRunner* runner, struct GUIFont* font,
 	if (partyCount > MAX_PARTY) partyCount = MAX_PARTY;
 	nextBadge = readNextBadge(wram, iwram);
 
-	/* Poll battle state each frame (detects events via diff) */
-	if (romprofileGet()->battleFlags != 0)
-		battlePoll(wram, rom);
-
 	/* --- Input handling --- */
 	{
 		unsigned pressed = sFramePressed;
@@ -782,16 +777,7 @@ void overlayDraw(struct mGUIRunner* runner, struct GUIFont* font,
 				if (slot >= 0 && slot < partyCount) {
 					sOverlayMode = slot;
 					sLearnsetScroll = 0;
-					/* If in battle log, switch back to party view */
-					if (battleLogShown())
-						battleToggleLog();
 				}
-			} else if (battleIsActive() &&
-			           touch.py >= (unsigned)(screenH - 16)) {
-				/* Battle tab touch: toggle battle log */
-				battleToggleLog();
-			} else if (battleLogShown()) {
-				/* Touch anywhere in the log area: ignore (scroll via C-Pad) */
 			} else {
 				/* Touch zone math (mirrors drawDetail layout) */
 				int topH = DETAIL_SPRITE + 12; /* inset*2 */
@@ -831,15 +817,10 @@ void overlayDraw(struct mGUIRunner* runner, struct GUIFont* font,
 			sLearnsetScroll = 0;
 		}
 		if (pressed & KEY_CPAD_DOWN) {
-			if (battleLogShown())
-				battleScroll(1);
-			else
-				sLearnsetScroll++;
+			sLearnsetScroll++;
 		}
 		if (pressed & KEY_CPAD_UP) {
-			if (battleLogShown())
-				battleScroll(-1);
-			else if (sLearnsetScroll > 0)
+			if (sLearnsetScroll > 0)
 				sLearnsetScroll--;
 		}
 
@@ -848,20 +829,9 @@ void overlayDraw(struct mGUIRunner* runner, struct GUIFont* font,
 	if (sOverlayMode >= partyCount)
 		sOverlayMode = 0;
 
-	/* --- Draw main area (battle log or detail view) --- */
-	if (battleLogShown()) {
-		int panelR = screenW - padX - SIDEBAR_W - SIDEBAR_GAP;
-		battleDrawLog(font, rom, padX, panelR, TOP_OFFSET, lineH);
-	} else {
-		drawDetail(font, wram, rom, sOverlayMode, partyCount,
-		           nextBadge, screenW, padX, padY, lineH);
-	}
-
-	/* --- Battle tab at the very bottom (only when in combat) --- */
-	{
-		int panelR = screenW - padX - SIDEBAR_W - SIDEBAR_GAP;
-		battleDrawTab(font, padX, panelR, screenH, lineH);
-	}
+	/* --- Draw main area --- */
+	drawDetail(font, wram, rom, sOverlayMode, partyCount,
+	           nextBadge, screenW, padX, padY, lineH);
 
 	/* --- Draw team sidebar (right edge) --- */
 	drawTeamSidebar(font, wram, rom, partyCount,

@@ -33,11 +33,6 @@ static const struct RomProfile sProfiles[] = {
 		0x0290,     /* sb1MoneyOffset */
 		{ 0x0310, 0x03B8, 0x0430, 0x0464, 0x054C }, /* sb1BagPocket */
 		{ 42, 30, 13, 58, 43 },                      /* sb1BagSize */
-		/* Battle system (from pokefirered decomp, confirmed relative to gPlayerParty) */
-		0x22B4C,    /* battleFlags (gBattleTypeFlags at 0x02022B4C) */
-		0x23BE4,    /* battleMons (gBattleMons at 0x02023BE4, 4 × 0x58) */
-		0x23D4A,    /* currentMove (gCurrentMove at 0x02023D4A) */
-		0x23D6B,    /* battlerAttacker (gBattlerAttacker at 0x02023D6B) */
 	},
 	{
 		/* Pokemon Emerald US v1.0 (vanilla) */
@@ -62,17 +57,12 @@ static const struct RomProfile sProfiles[] = {
 		0x0490,     /* sb1MoneyOffset */
 		{ 0x0560, 0x05D8, 0x0650, 0x0690, 0x0790 }, /* sb1BagPocket */
 		{ 30, 30, 16, 64, 46 },                      /* sb1BagSize */
-		/* Battle system (from pokeemerald decomp symbols branch) */
-		0x22FF0,    /* battleFlags (gBattleTypeFlags at 0x02022FF0) */
-		0x24084,    /* battleMons (gBattleMons at 0x02024084, 4 × 0x58) */
-		0x241EA,    /* currentMove (gCurrentMove at 0x020241EA) */
-		0x2420B,    /* battlerAttacker (gBattlerAttacker at 0x0202420B) */
 	},
 	{
 		/* Pokemon Lazarus v2.0 (pokeemerald-expansion based hack)
 		 * Party offsets extracted from save state EWRAM dump.
 		 * ROM tables use vanilla Emerald offsets — may not be accurate.
-		 * Battle/badge offsets unknown — zeroed to disable those features. */
+		 * Badge offsets unknown — zeroed to disable those features. */
 		"Lazarus v2.0",
 		2000,       /* speciesCount (expansion adds gen 4-9, ~1400+ species) */
 		900,        /* moveCount (expansion adds gen 4-9 moves) */
@@ -93,10 +83,6 @@ static const struct RomProfile sProfiles[] = {
 		0,          /* sb1MoneyOffset (unknown) */
 		{ 0, 0, 0, 0, 0 }, /* sb1BagPocket (unknown) */
 		{ 0, 0, 0, 0, 0 }, /* sb1BagSize (unknown) */
-		0,          /* battleFlags (unknown) */
-		0,          /* battleMons (unknown) */
-		0,          /* currentMove (unknown) */
-		0,          /* battlerAttacker (unknown) */
 	},
 };
 
