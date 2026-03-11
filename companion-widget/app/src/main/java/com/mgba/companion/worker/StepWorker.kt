@@ -99,6 +99,7 @@ class StepWorker(
         }
 
         sensorManager.registerListener(listener, stepSensor, SensorManager.SENSOR_DELAY_FASTEST, handler)
+        sensorManager.flush(listener) // force delivery of last cached value
         latch.await(5, TimeUnit.SECONDS)
         sensorManager.unregisterListener(listener)
         handlerThread.quit()

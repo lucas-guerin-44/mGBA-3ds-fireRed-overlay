@@ -30,4 +30,4 @@ companion-widget/local.properties
 companion-widget/.idea/
 companion-widget/app/release/
 *.apk
-*.aab
+*.aab.DS_Store
