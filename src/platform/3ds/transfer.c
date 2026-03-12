@@ -430,6 +430,27 @@ int transferPoll(struct mGUIRunner* runner, uint32_t keys) {
 			         "Sent %s (Lv.%u)!", sSpeciesName, sLevel);
 			sStatusClr  = CLR_GREEN;
 			sDoneFrames = 90;
+
+			/* Remove the slot from the party in WRAM */
+			if (runner && runner->core && runner->core->board) {
+				struct GBA* gba   = (struct GBA*) runner->core->board;
+				uint8_t*    wram  = (uint8_t*) gba->memory.wram;
+				const struct RomProfile* prof = romprofileGet();
+				if (prof) {
+					int count = wram[prof->partyCount];
+					if (count > 6) count = 6;
+					if (sSendSlot >= 0 && sSendSlot < count) {
+						int i;
+						for (i = sSendSlot; i < count - 1; i++)
+							memcpy(wram + prof->partyData + i * SLOT_SIZE,
+							       wram + prof->partyData + (i + 1) * SLOT_SIZE,
+							       SLOT_SIZE);
+						memset(wram + prof->partyData + (count - 1) * SLOT_SIZE,
+						       0, SLOT_SIZE);
+						wram[prof->partyCount] = (uint8_t)(count - 1);
+					}
+				}
+			}
 		}
 		if (keys & KEY_B) return -1;
 		return 0;
