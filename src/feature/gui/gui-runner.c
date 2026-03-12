@@ -38,9 +38,9 @@ enum {
 	RUNNER_RESET,
 	RUNNER_CHEATS,
 	RUNNER_TOGGLE_OVERLAY,
-	RUNNER_TOGGLE_NETWORK,
 	RUNNER_QR_SCAN,
 	RUNNER_WALKER_SEND,
+	RUNNER_TRANSFER_MODE,
 	RUNNER_SET_PROFILE,
 	RUNNER_COMMAND_MASK = 0xFFFF
 };
@@ -48,12 +48,12 @@ enum {
 #ifdef __3DS__
 extern bool _3dsOverlayVisible(void);
 extern void _3dsToggleOverlay(void);
-extern bool _3dsNetworkRunning(void);
-extern void _3dsToggleNetwork(void);
 extern void _3dsStartQrScan(void);
 extern bool _3dsIsQrScanning(void);
 extern void _3dsStartWalkerSend(struct mGUIRunner* runner);
 extern bool _3dsIsWalkerActive(void);
+extern void _3dsStartTransferMode(struct mGUIRunner* runner);
+extern bool _3dsIsTransferActive(void);
 extern void _3dsProfileSetSlot(int slot);
 extern int _3dsProfileGetCount(void);
 extern const char* _3dsProfileGetSlotName(int slot);
@@ -415,11 +415,6 @@ void mGUIRun(struct mGUIRunner* runner, const char* path) {
 		.title = _3dsOverlayVisible() ? "Hide Overlay" : "Show Overlay",
 		.data = GUI_V_U(RUNNER_TOGGLE_OVERLAY)
 	};
-	struct GUIMenuItem* networkItem = GUIMenuItemListAppend(&pauseMenu.items);
-	*networkItem = (struct GUIMenuItem) {
-		.title = _3dsNetworkRunning() ? "Network Sharing: On" : "Network Sharing: Off",
-		.data = GUI_V_U(RUNNER_TOGGLE_NETWORK)
-	};
 	*GUIMenuItemListAppend(&pauseMenu.items) = (struct GUIMenuItem) {
 		.title = "Claim Rewards (QR Scan)",
 		.data = GUI_V_U(RUNNER_QR_SCAN)
@@ -427,6 +422,10 @@ void mGUIRun(struct mGUIRunner* runner, const char* path) {
 	*GUIMenuItemListAppend(&pauseMenu.items) = (struct GUIMenuItem) {
 		.title = "Pokewalker (Send Mon)",
 		.data = GUI_V_U(RUNNER_WALKER_SEND)
+	};
+	*GUIMenuItemListAppend(&pauseMenu.items) = (struct GUIMenuItem) {
+		.title = "Transfer Mode (WiFi)",
+		.data = GUI_V_U(RUNNER_TRANSFER_MODE)
 	};
 	{
 		int i, count = _3dsProfileGetCount();
@@ -747,15 +746,14 @@ void mGUIRun(struct mGUIRunner* runner, const char* path) {
 				_3dsToggleOverlay();
 				overlayItem->title = _3dsOverlayVisible() ? "Hide Overlay" : "Show Overlay";
 				break;
-			case RUNNER_TOGGLE_NETWORK:
-				_3dsToggleNetwork();
-				networkItem->title = _3dsNetworkRunning() ? "Network Sharing: On" : "Network Sharing: Off";
-				break;
 			case RUNNER_QR_SCAN:
 				_3dsStartQrScan();
 				break;
 			case RUNNER_WALKER_SEND:
 				_3dsStartWalkerSend(runner);
+				break;
+			case RUNNER_TRANSFER_MODE:
+				_3dsStartTransferMode(runner);
 				break;
 			case RUNNER_SET_PROFILE:
 				_3dsProfileSetSlot(item->data.v.u >> 16);

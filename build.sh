@@ -70,17 +70,50 @@ case "$(uname -s)" in
     ;;
 esac
 
+# libpng's options.awk requires GNU awk. On macOS the system awk is BSD awk
+# which doesn't support the syntax used, so prefer gawk if available.
+# gawk 5.x uses a multibyte regex engine by default which breaks /,$/ matching;
+# wrapping it with LC_ALL=C forces the C locale and fixes the issue.
+GAWK="$(which gawk 2>/dev/null || true)"
+if [ -n "$GAWK" ]; then
+  # Wrapper is created inside the cmake block below (after clean wipes the dir)
+  CMAKE_EXTRA_ARGS="$CMAKE_EXTRA_ARGS -DGAWK=$GAWK"
+fi
+
+# Check for bannertool (needed for .smdh and .cia targets).
+# On macOS: brew install gnupg, then:
+#   sudo /opt/devkitpro/pacman/bin/pacman-key --init
+#   sudo /opt/devkitpro/pacman/bin/pacman-key --populate
+#   sudo /opt/devkitpro/pacman/bin/pacman -S bannertool
+if ! command -v bannertool >/dev/null 2>&1; then
+  echo "WARNING: bannertool not found — .smdh and .cia targets will fail."
+  echo "  macOS fix:"
+  echo "    brew install gnupg"
+  echo "    sudo /opt/devkitpro/pacman/bin/pacman-key --init"
+  echo "    sudo /opt/devkitpro/pacman/bin/pacman-key --populate"
+  echo "    sudo /opt/devkitpro/pacman/bin/pacman -S bannertool"
+fi
+
 echo "=== Environment ==="
 echo "  DEVKITPRO=$DEVKITPRO"
 echo "  DEVKITARM=$DEVKITARM"
-echo "  cmake: $(which cmake 2>/dev/null || echo 'NOT FOUND')"
-echo "  make:  $(which make 2>/dev/null || echo 'NOT FOUND')"
-echo "  gcc:   $(which arm-none-eabi-gcc 2>/dev/null || echo 'NOT FOUND')"
+echo "  cmake:      $(which cmake 2>/dev/null || echo 'NOT FOUND')"
+echo "  make:       $(which make 2>/dev/null || echo 'NOT FOUND')"
+echo "  gcc:        $(which arm-none-eabi-gcc 2>/dev/null || echo 'NOT FOUND')"
+echo "  bannertool: $(which bannertool 2>/dev/null || echo 'NOT FOUND')"
 
 if [ "$CLEAN" -eq 1 ] || [ ! -f "$BUILD_DIR/CMakeCache.txt" ]; then
   echo "=== Clean ==="
   rm -rf "$BUILD_DIR"
   mkdir -p "$BUILD_DIR"
+
+  # Create gawk wrapper here (after clean) so it survives into the build.
+  if [ -n "$GAWK" ]; then
+    GAWK_WRAPPER="$BUILD_DIR/gawk-lc.sh"
+    printf '#!/bin/sh\nLC_ALL=C exec "%s" "$@"\n' "$GAWK" > "$GAWK_WRAPPER"
+    chmod +x "$GAWK_WRAPPER"
+    CMAKE_EXTRA_ARGS="${CMAKE_EXTRA_ARGS/-DGAWK=$GAWK/} -DAWK=$GAWK_WRAPPER"
+  fi
 
   echo "=== CMake ==="
   cd "$BUILD_DIR"
@@ -94,7 +127,7 @@ else
 fi
 
 echo "=== Build ==="
-make -j$(nproc) 2>&1
+make -j$(nproc 2>/dev/null || sysctl -n hw.logicalcpu 2>/dev/null || echo 4) 2>&1
 
 echo "=== Done ==="
 echo "Output: $BUILD_DIR/3ds/mgba.cia"

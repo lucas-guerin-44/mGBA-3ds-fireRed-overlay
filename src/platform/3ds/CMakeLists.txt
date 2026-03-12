@@ -4,6 +4,7 @@ mark_as_advanced(USE_VFS_3DS)
 find_program(3DSLINK 3dslink)
 find_program(3DSXTOOL 3dsxtool)
 find_program(BANNERTOOL bannertool)
+find_program(SMDHTOOL smdhtool)
 find_program(MAKEROM makerom)
 find_program(PICASSO picasso)
 find_program(RAW2C raw2c)
@@ -49,13 +50,22 @@ set_source_files_properties(
 	${CMAKE_CURRENT_BINARY_DIR}/uishader.shbin.h
 	PROPERTIES GENERATED ON)
 
-add_executable(${BINARY_NAME}.elf ${GUI_SRC} main.c overlay.c sprite.c romprofile.c netserver.c qrscan.c walker.c quirc/quirc.c quirc/identify.c quirc/decode.c quirc/version_db.c qrcodegen/qrcodegen.c)
+add_executable(${BINARY_NAME}.elf ${GUI_SRC} main.c overlay.c sprite.c romprofile.c transfer.c qrscan.c walker.c quirc/quirc.c quirc/identify.c quirc/decode.c quirc/version_db.c qrcodegen/qrcodegen.c)
 set_target_properties(${BINARY_NAME}.elf PROPERTIES COMPILE_DEFINITIONS "${OS_DEFINES};${FEATURE_DEFINES};${FUNCTION_DEFINES};QUIRC_FLOAT_TYPE=float;QUIRC_USE_TGMATH;QUIRC_MAX_REGIONS=1024")
 target_link_libraries(${BINARY_NAME}.elf ${BINARY_NAME} ${M_LIBRARY} ${OS_LIB})
 
-add_custom_command(OUTPUT ${BINARY_NAME}.smdh
-                   COMMAND ${BANNERTOOL} makesmdh -s "${PROJECT_NAME}" -l "${SUMMARY}" -p "endrift" -i ${CMAKE_SOURCE_DIR}/res/mgba-48.png -o ${BINARY_NAME}.smdh
-                   DEPENDS ${CMAKE_SOURCE_DIR}/res/mgba-48.png)
+# Use bannertool if available, fall back to smdhtool (both create .smdh files)
+if(BANNERTOOL)
+	add_custom_command(OUTPUT ${BINARY_NAME}.smdh
+	                   COMMAND ${BANNERTOOL} makesmdh -s "${PROJECT_NAME}" -l "${SUMMARY}" -p "endrift" -i ${CMAKE_SOURCE_DIR}/res/mgba-48.png -o ${BINARY_NAME}.smdh
+	                   DEPENDS ${CMAKE_SOURCE_DIR}/res/mgba-48.png)
+elseif(SMDHTOOL)
+	add_custom_command(OUTPUT ${BINARY_NAME}.smdh
+	                   COMMAND ${SMDHTOOL} --create "${PROJECT_NAME}" "${SUMMARY}" "endrift" ${CMAKE_SOURCE_DIR}/res/mgba-48.png ${BINARY_NAME}.smdh
+	                   DEPENDS ${CMAKE_SOURCE_DIR}/res/mgba-48.png)
+else()
+	message(FATAL_ERROR "Neither bannertool nor smdhtool found. Install bannertool via dkp-pacman.")
+endif()
 
 add_custom_command(OUTPUT ${BINARY_NAME}.xml
                    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/hbl.xml ${BINARY_NAME}.xml

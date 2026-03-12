@@ -63,6 +63,13 @@ static uint32_t sStatusColor = 0;
 /* Frame counter */
 static int sFrameCount = 0;
 
+/* Persistent DMA state: keep one outstanding transfer across frames so
+ * qrscanPoll never blocks the main thread waiting for a camera frame. */
+static Handle sCamEvent = 0;
+static bool sCamDmaPending = false;
+static int sCamStaleFrames = 0;   /* main-loop frames waited without a new cam frame */
+#define CAM_STALE_LIMIT 120        /* ~2s at 60fps before treating camera as hung */
+
 /* Preview texture */
 static C3D_Tex sPreviewTex;
 static bool sPreviewTexInited = false;
@@ -165,6 +172,9 @@ int qrscanInit(void) {
 	sHasResult = false;
 	sPayloadLen = 0;
 	sFrameCount = 0;
+	sCamEvent = 0;
+	sCamDmaPending = false;
+	sCamStaleFrames = 0;
 	snprintf(sStatusMsg, sizeof(sStatusMsg), "Ready");
 	sStatusColor = CLR_GRAY;
 
@@ -175,7 +185,11 @@ void qrscanExit(void) {
 	if (!sInited) return;
 
 	if (sActive) {
-		qrscanStop();
+		qrscanStop(); /* also cleans up sCamEvent / sCamDmaPending */
+	} else if (sCamDmaPending) {
+		svcCloseHandle(sCamEvent);
+		sCamEvent = 0;
+		sCamDmaPending = false;
 	}
 
 	if (sPreviewTexInited) {
@@ -209,6 +223,9 @@ void qrscanStart(void) {
 	sHasResult = false;
 	sPayloadLen = 0;
 	sFrameCount = 0;
+	sCamEvent = 0;
+	sCamDmaPending = false;
+	sCamStaleFrames = 0;
 
 	snprintf(sStatusMsg, sizeof(sStatusMsg), "Scanning...");
 	sStatusColor = CLR_YELLOW;
@@ -217,9 +234,20 @@ void qrscanStart(void) {
 void qrscanStop(void) {
 	if (!sActive) return;
 
+	/* Stop capture first — this signals any pending DMA event */
 	CAMU_StopCapture(PORT_CAM1);
-	CAMU_Activate(SELECT_NONE);
 
+	/* Wait for DMA to be cancelled by StopCapture before closing the handle.
+	 * Camera runs at 15 fps (~67 ms/frame); 200 ms covers 3 full frames. */
+	if (sCamDmaPending) {
+		svcWaitSynchronization(sCamEvent, 200000000ULL); /* 200 ms */
+		svcCloseHandle(sCamEvent);
+		sCamEvent = 0;
+		sCamDmaPending = false;
+		sCamStaleFrames = 0;
+	}
+
+	CAMU_Activate(SELECT_NONE);
 	sActive = false;
 }
 
@@ -228,7 +256,6 @@ int qrscanIsActive(void) {
 }
 
 int qrscanPoll(void) {
-	Handle event = 0;
 	uint8_t* qBuf;
 	int qW, qH;
 	int count, i;
@@ -236,22 +263,49 @@ int qrscanPoll(void) {
 
 	if (!sActive) return 0;
 
-	/* Request a frame via DMA */
-	rc = CAMU_SetReceiving(&event, sCamBuf, PORT_CAM1,
-	                        CAM_BUF_SIZE, sTransferUnit);
-	if (R_FAILED(rc)) {
-		snprintf(sStatusMsg, sizeof(sStatusMsg),
-		         "Recv err: %08lX tu=%d", rc, (int)sTransferUnit);
-		sStatusColor = CLR_RED;
+	/* If no DMA is in flight, kick off a new one and return immediately.
+	 * The frame will be ready (at 15 fps) within ~4 main-loop frames. */
+	if (!sCamDmaPending) {
+		rc = CAMU_SetReceiving(&sCamEvent, sCamBuf, PORT_CAM1,
+		                       CAM_BUF_SIZE, sTransferUnit);
+		if (R_FAILED(rc)) {
+			snprintf(sStatusMsg, sizeof(sStatusMsg),
+			         "Recv err: %08lX tu=%d", rc, (int)sTransferUnit);
+			sStatusColor = CLR_RED;
+			return 0;
+		}
+		sCamDmaPending = true;
+		sCamStaleFrames = 0;
 		return 0;
 	}
 
-	/* Wait for frame */
-	rc = svcWaitSynchronization(event, 1000000000ULL); /* 1s timeout */
-	svcCloseHandle(event);
+	/* Non-blocking poll: has the outstanding DMA completed? */
+	rc = svcWaitSynchronization(sCamEvent, 0);
 	if (rc != 0) {
+		/* Frame not ready yet — count waiting frames */
+		sCamStaleFrames++;
+		if (sCamStaleFrames >= CAM_STALE_LIMIT) {
+			/* Camera appears hung: stop capture first so DMA is cancelled
+			 * and the event gets signalled, THEN close the handle safely. */
+			CAMU_StopCapture(PORT_CAM1);
+			svcWaitSynchronization(sCamEvent, 200000000ULL); /* 200 ms */
+			svcCloseHandle(sCamEvent);
+			sCamEvent = 0;
+			sCamDmaPending = false;
+			sCamStaleFrames = 0;
+			CAMU_ClearBuffer(PORT_CAM1);
+			CAMU_StartCapture(PORT_CAM1);
+			snprintf(sStatusMsg, sizeof(sStatusMsg), "Camera reset...");
+			sStatusColor = CLR_YELLOW;
+		}
 		return 0;
 	}
+
+	/* DMA complete — consume the handle and process the frame */
+	svcCloseHandle(sCamEvent);
+	sCamEvent = 0;
+	sCamDmaPending = false;
+	sCamStaleFrames = 0;
 
 	sFrameCount++;
 

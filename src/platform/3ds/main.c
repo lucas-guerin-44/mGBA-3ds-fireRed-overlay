@@ -28,9 +28,9 @@
 #include "ctr-gpu.h"
 #include "overlay.h"
 #include "romprofile.h"
-#include "netserver.h"
 #include "qrscan.h"
 #include "walker.h"
+#include "transfer.h"
 
 #include <3ds.h>
 #include <3ds/gpu/gx.h>
@@ -158,9 +158,9 @@ static bool _initGpu(void) {
 }
 
 static bool sShowOverlay = true;
-static bool sNetworkEnabled = true;
 static bool sQrScannerActive = false;
 static bool sWalkerActive = false;
+static bool sTransferActive = false;
 
 static int sOverlayBacklightOff = 0; /* which screen backlight is off (0=none) */
 static aptHookCookie sAptHookCookie;
@@ -670,21 +670,14 @@ static void _drawOverlay(struct mGUIRunner* runner) {
 			sDetected = 1;
 			sEverSupported = romprofileIsSupported();
 			_updateOverlayBacklight();
-			if (romprofileIsSupported() && sNetworkEnabled) {
-				netserverStart(8888);
-			}
-			/* Init QR scanner (camera + quirc) */
+				/* Init QR scanner (camera + quirc) and transfer mode */
 			qrscanInit();
 			walkerInit();
+			transferInit();
 		}
 		/* Skip overlay entirely for ROMs that never matched any game code */
 		if (!sEverSupported && !romprofileIsSupported())
 			return;
-	}
-
-	/* Update network even when overlay is hidden */
-	if (sNetworkEnabled) {
-		netserverUpdateParty(runner);
 	}
 
 	// Draw overlay on the screen opposite the game
@@ -750,6 +743,20 @@ static void _drawOverlay(struct mGUIRunner* runner) {
 		return;
 	}
 
+	if (sTransferActive) {
+		/* WiFi transfer mode replaces the overlay */
+		int result = transferPoll(runner, sOverlayKeysDown);
+		transferDraw(runner->params.font, screenW, screenH);
+		ctrFlushBatch();
+
+		if (result != 0) {
+			transferEnd();
+			sTransferActive = false;
+		}
+		sOverlayKeysDown = 0;
+		return;
+	}
+
 	if (!sShowOverlay)
 		return;
 
@@ -776,7 +783,7 @@ static void _drawFrame(struct mGUIRunner* runner, bool faded) {
 	}
 
 	_drawTex(runner->core, faded, interframeBlending);
-	if (!faded || sQrScannerActive || sWalkerActive) {
+	if (!faded || sQrScannerActive || sWalkerActive || sTransferActive) {
 		_drawOverlay(runner);
 	}
 }
@@ -997,19 +1004,6 @@ void _3dsToggleOverlay(void) {
 	_updateOverlayBacklight();
 }
 
-bool _3dsNetworkRunning(void) {
-	return sNetworkEnabled;
-}
-
-void _3dsToggleNetwork(void) {
-	sNetworkEnabled = !sNetworkEnabled;
-	if (sNetworkEnabled) {
-		netserverStart(8888);
-	} else {
-		netserverStop();
-	}
-}
-
 void _3dsStartQrScan(void) {
 	if (qrscanIsReady()) {
 		sQrScannerActive = true;
@@ -1030,6 +1024,17 @@ void _3dsStartWalkerSend(struct mGUIRunner* runner) {
 	if (walkerStartSend(runner, slot)) {
 		sWalkerActive = true;
 	}
+}
+
+void _3dsStartTransferMode(struct mGUIRunner* runner) {
+	int slot = overlayGetSelectedSlot();
+	if (transferBegin(runner, slot)) {
+		sTransferActive = true;
+	}
+}
+
+bool _3dsIsTransferActive(void) {
+	return sTransferActive;
 }
 
 int _3dsProfileGetSlot(void) {
@@ -1281,7 +1286,7 @@ int main() {
 
 	mGUIRunloop(&runner);
 	qrscanExit();
-	netserverStop();
+	transferEnd();
 	mGUIDeinit(&runner);
 
 	_cleanup();
