@@ -203,9 +203,14 @@ static void handleRequest(Socket client) {
 		char* cl;
 		ssize_t more;
 
-		/* Parse Content-Length (case-insensitive first char) */
-		cl = strstr(buf, "ontent-Length: ");
-		if (cl) clen = (int)strtol(cl + 15, NULL, 10);
+		/* Parse Content-Length — try both title-case and lowercase (HTTP/1.1) */
+		cl = strstr(buf, "Content-Length: ");
+		if (!cl) cl = strstr(buf, "content-length: ");
+		if (cl) {
+			/* Skip past the colon+space regardless of which variant matched */
+			const char* colon = strchr(cl, ':');
+			if (colon) clen = (int)strtol(colon + 2, NULL, 10);
+		}
 
 		if (clen != SLOT_SIZE) {
 			sendHttpResponse(client, 400, "Bad Request",
