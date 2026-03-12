@@ -32,4 +32,4 @@ BUILD_DIR="${BUILD_DIR:-build}"
 echo "=== Serve ==="
 SERVE_ARGS=("$SCRIPT_DIR/$BUILD_DIR")
 [ -n "$PORT" ] && SERVE_ARGS+=("$PORT")
-python "$SCRIPT_DIR/serve.py" "${SERVE_ARGS[@]}"
+python3 "$SCRIPT_DIR/serve.py" "${SERVE_ARGS[@]}"

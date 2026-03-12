@@ -512,14 +512,14 @@ void transferDraw(struct GUIFont* font, int screenW, int screenH) {
 			"Cancel",
 		};
 
-		GUIFontPrintf(font, cx, 6, GUI_ALIGN_HCENTER, CLR_CYAN,
+		GUIFontPrintf(font, cx, 38, GUI_ALIGN_HCENTER, CLR_CYAN,
 		              "TRANSFER MODE");
-		GUIFontPrintf(font, cx, 6 + lineH, GUI_ALIGN_HCENTER, CLR_GRAY,
+		GUIFontPrintf(font, cx, 38 + lineH, GUI_ALIGN_HCENTER, CLR_GRAY,
 		              "%s  Lv.%u", sSpeciesName, sLevel);
 
-		drawRect(2, 36, screenW - 4, 1, UI_BORDER);
+		drawRect(2, 68, screenW - 4, 1, UI_BORDER);
 
-		y = 44;
+		y = 76;
 		for (i = 0; i < 3; i++) {
 			uint32_t bgClr  = (i == sMenuSel) ? UI_SEL_BG : UI_PANEL;
 			uint32_t txtClr = (i == sMenuSel) ? CLR_WHITE  : CLR_GRAY;
@@ -545,13 +545,13 @@ void transferDraw(struct GUIFont* font, int screenW, int screenH) {
 
 	/* ── SEND ── */
 	if (sState == TMODE_SEND) {
-		GUIFontPrintf(font, cx, 6, GUI_ALIGN_HCENTER, CLR_CYAN,
+		GUIFontPrintf(font, cx, 38, GUI_ALIGN_HCENTER, CLR_CYAN,
 		              "TRANSFER — SEND");
-		GUIFontPrintf(font, cx, 6 + lineH, GUI_ALIGN_HCENTER, CLR_WHITE,
+		GUIFontPrintf(font, cx, 38 + lineH, GUI_ALIGN_HCENTER, CLR_WHITE,
 		              "%s  Lv.%u", sSpeciesName, sLevel);
 
-		drawRect(2, 34, screenW - 4, 1, UI_BORDER);
-		y = 44;
+		drawRect(2, 66, screenW - 4, 1, UI_BORDER);
+		y = 76;
 
 		if (sSockInited && !SOCKET_FAILED(sListenSock)) {
 			GUIFontPrintf(font, 10, y, GUI_ALIGN_LEFT, CLR_GRAY,
@@ -567,7 +567,7 @@ void transferDraw(struct GUIFont* font, int screenW, int screenH) {
 			              "No WiFi connection");
 		}
 
-		y = 160;
+		y = 192;
 		GUIFontPrintf(font, cx, y, GUI_ALIGN_HCENTER, sStatusClr,
 		              "%s", sStatusMsg);
 
@@ -579,11 +579,11 @@ void transferDraw(struct GUIFont* font, int screenW, int screenH) {
 
 	/* ── RECV ── */
 	if (sState == TMODE_RECV) {
-		GUIFontPrintf(font, cx, 6, GUI_ALIGN_HCENTER, CLR_CYAN,
+		GUIFontPrintf(font, cx, 38, GUI_ALIGN_HCENTER, CLR_CYAN,
 		              "TRANSFER — RECEIVE");
 
-		drawRect(2, 22, screenW - 4, 1, UI_BORDER);
-		y = 30;
+		drawRect(2, 54, screenW - 4, 1, UI_BORDER);
+		y = 62;
 
 		if (sSockInited && !SOCKET_FAILED(sListenSock)) {
 			GUIFontPrintf(font, 10, y, GUI_ALIGN_LEFT, CLR_GRAY,
@@ -613,7 +613,7 @@ void transferDraw(struct GUIFont* font, int screenW, int screenH) {
 			              "No WiFi connection");
 		}
 
-		y = 188;
+		y = 220;
 		GUIFontPrintf(font, cx, y, GUI_ALIGN_HCENTER, sStatusClr,
 		              "%s", sStatusMsg);
 

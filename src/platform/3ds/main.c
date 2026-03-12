@@ -816,6 +816,12 @@ static uint16_t _pollGameInput(struct mGUIRunner* runner) {
 
 	hidScanInput();
 	sOverlayKeysDown |= hidKeysDown(); /* capture for overlay before state resets */
+
+	/* Block all GBA input while an overlay mode is consuming the controls */
+	if (sTransferActive || sWalkerActive || sQrScannerActive) {
+		return 0;
+	}
+
 	uint32_t activeKeys = hidKeysHeld();
 	uint16_t keys = mInputMapKeyBits(&runner->core->inputMap, _3DS_INPUT, activeKeys, 0);
 	return keys;

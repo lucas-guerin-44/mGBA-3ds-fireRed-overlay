@@ -572,7 +572,7 @@ void mGUIRun(struct mGUIRunner* runner, const char* path) {
 				}
 			}
 #ifdef __3DS__
-			if (_3dsIsQrScanning() || _3dsIsWalkerActive()) {
+			if (_3dsIsQrScanning() || _3dsIsWalkerActive() || _3dsIsTransferActive()) {
 				/* During QR scan or walker: only poll game input (single hidScanInput)
 				 * so buttons reach sOverlayKeysDown, then draw scanner/walker UI */
 				runner->pollGameInput(runner);
