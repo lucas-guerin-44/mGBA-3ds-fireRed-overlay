@@ -324,14 +324,20 @@ int transferBegin(struct mGUIRunner* runner, int slot) {
 
 	partyCount = wram[prof->partyCount];
 	if (partyCount > 6) partyCount = 6;
-	if (partyCount == 0) return 0;
 	if (slot < 0 || slot >= partyCount) slot = 0;
 
-	/* Snapshot the party slot */
-	memcpy(sMonBlob, wram + prof->partyData + slot * SLOT_SIZE, SLOT_SIZE);
-	sSendSlot = slot;
-	sLevel    = sMonBlob[0x54];
-	speciesNameFromBlob(sMonBlob, rom, sSpeciesName, sizeof(sSpeciesName));
+	/* Snapshot the selected party slot (needed for SEND; harmless if party empty) */
+	if (partyCount > 0) {
+		memcpy(sMonBlob, wram + prof->partyData + slot * SLOT_SIZE, SLOT_SIZE);
+		sSendSlot = slot;
+		sLevel    = sMonBlob[0x54];
+		speciesNameFromBlob(sMonBlob, rom, sSpeciesName, sizeof(sSpeciesName));
+	} else {
+		memset(sMonBlob, 0, SLOT_SIZE);
+		sSendSlot = -1;
+		sLevel    = 0;
+		sSpeciesName[0] = ' ';
+	}
 
 	/* Start socket subsystem */
 	SocketSubsystemInit();
@@ -405,10 +411,17 @@ int transferPoll(struct mGUIRunner* runner, uint32_t keys) {
 		}
 		if (keys & KEY_A) {
 			if (sMenuSel == 0) {
-				sState = TMODE_SEND;
-				snprintf(sStatusMsg, sizeof(sStatusMsg),
-				         "Waiting for connection...");
-				sStatusClr = CLR_GRAY;
+				if (sSendSlot < 0) {
+					/* Party is empty — can't send */
+					snprintf(sStatusMsg, sizeof(sStatusMsg),
+					         "No Pokemon in party!");
+					sStatusClr = CLR_RED;
+				} else {
+					sState = TMODE_SEND;
+					snprintf(sStatusMsg, sizeof(sStatusMsg),
+					         "Waiting for connection...");
+					sStatusClr = CLR_GRAY;
+				}
 			} else if (sMenuSel == 1) {
 				sState = TMODE_RECV;
 				snprintf(sStatusMsg, sizeof(sStatusMsg),
@@ -535,19 +548,24 @@ void transferDraw(struct GUIFont* font, int screenW, int screenH) {
 
 		GUIFontPrintf(font, cx, 22, GUI_ALIGN_HCENTER, CLR_CYAN,
 		              "TRANSFER MODE");
-		GUIFontPrintf(font, cx, 22 + lineH, GUI_ALIGN_HCENTER, CLR_GRAY,
-		              "%s  Lv.%u", sSpeciesName, sLevel);
+		if (sSendSlot >= 0)
+			GUIFontPrintf(font, cx, 22 + lineH, GUI_ALIGN_HCENTER, CLR_GRAY,
+			              "%s  Lv.%u", sSpeciesName, sLevel);
+		else
+			GUIFontPrintf(font, cx, 22 + lineH, GUI_ALIGN_HCENTER, CLR_RED,
+			              "Party empty");
 
 		drawRect(2, 52, screenW - 4, 1, UI_BORDER);
 
 		y = 60;
 		for (i = 0; i < 3; i++) {
-			uint32_t bgClr  = (i == sMenuSel) ? UI_SEL_BG : UI_PANEL;
-			uint32_t txtClr = (i == sMenuSel) ? CLR_WHITE  : CLR_GRAY;
+			bool disabled = (i == 0 && sSendSlot < 0); /* Send disabled if no party */
+			uint32_t bgClr  = (i == sMenuSel && !disabled) ? UI_SEL_BG : UI_PANEL;
+			uint32_t txtClr = disabled ? CLR_DARK : (i == sMenuSel) ? CLR_WHITE : CLR_GRAY;
 			int rowH = lineH + 6;
 
 			drawRect(8, y - 2, screenW - 16, rowH, bgClr);
-			if (i == sMenuSel) {
+			if (i == sMenuSel && !disabled) {
 				drawRect(8, y - 2, 3, rowH, UI_ACCENT);
 				GUIFontPrintf(font, 18, y + 2, GUI_ALIGN_LEFT, txtClr,
 				              "> %s", kItems[i]);
