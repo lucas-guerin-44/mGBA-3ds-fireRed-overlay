@@ -80,18 +80,24 @@ if [ -n "$GAWK" ]; then
   CMAKE_EXTRA_ARGS="$CMAKE_EXTRA_ARGS -DGAWK=$GAWK"
 fi
 
-# Check for bannertool (needed for .smdh and .cia targets).
-# On macOS: brew install gnupg, then:
-#   sudo /opt/devkitpro/pacman/bin/pacman-key --init
-#   sudo /opt/devkitpro/pacman/bin/pacman-key --populate
-#   sudo /opt/devkitpro/pacman/bin/pacman -S bannertool
+# Check for bannertool + makerom (needed for .bnr/.smdh and .cia targets).
+# Neither is in the dkp-pacman repo — download pre-built macOS binaries from:
+#   bannertool: github.com/Steveice10/bannertool/releases  → put in /opt/devkitpro/tools/bin/
+#   makerom:    github.com/3dbrew/makerom/releases         → put in /opt/devkitpro/tools/bin/
+# The .3dsx target still builds without them (smdhtool is used as fallback).
+MISSING_CIA_TOOLS=""
 if ! command -v bannertool >/dev/null 2>&1; then
-  echo "WARNING: bannertool not found — .smdh and .cia targets will fail."
-  echo "  macOS fix:"
-  echo "    brew install gnupg"
-  echo "    sudo /opt/devkitpro/pacman/bin/pacman-key --init"
-  echo "    sudo /opt/devkitpro/pacman/bin/pacman-key --populate"
-  echo "    sudo /opt/devkitpro/pacman/bin/pacman -S bannertool"
+  MISSING_CIA_TOOLS="bannertool"
+fi
+if ! command -v makerom >/dev/null 2>&1; then
+  MISSING_CIA_TOOLS="$MISSING_CIA_TOOLS makerom"
+fi
+if [ -n "$MISSING_CIA_TOOLS" ]; then
+  echo "WARNING: missing tools for .cia build:$MISSING_CIA_TOOLS"
+  echo "  Download macOS binaries and place in /opt/devkitpro/tools/bin/"
+  echo "  bannertool: github.com/Steveice10/bannertool/releases"
+  echo "  makerom:    github.com/3dbrew/makerom/releases"
+  echo "  (.3dsx build is unaffected)"
 fi
 
 echo "=== Environment ==="
